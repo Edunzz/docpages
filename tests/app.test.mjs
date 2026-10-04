@@ -8,9 +8,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { bootApp, siteFetch, jsonResponse, memoryStorage, runAxe, tick } from "./helpers.mjs";
+import { ROOT, bootApp, siteFetch, jsonResponse, memoryStorage, runAxe, tick } from "./helpers.mjs";
 import { VALID_TEST, withFrontMatter, makeSite, quizWith } from "./fixtures.mjs";
 import { generateManifest } from "../scripts/build-manifest.mjs";
 
@@ -507,7 +507,9 @@ test("rutas: funciona en la raíz de un sitio de usuario y en local sin reposito
   await userSite.app.navigate("#/steps/publish-github-pages");
   assert.equal(userSite.doc.querySelectorAll(".step").length, 5);
 
-  const local = await bootApp({ url: "http://localhost:8080/" });
+  // En el CI el manifiesto se genera con GITHUB_REPOSITORY: aquí se simula uno local (sin repositorio).
+  const localManifest = { ...JSON.parse(await readFile(path.join(ROOT, "documents.manifest.json"), "utf8")), repository: null };
+  const local = await bootApp({ url: "http://localhost:8080/", fetchImpl: siteFetch({ base: "http://localhost:8080/", routes: { "http://localhost:8080/documents.manifest.json": () => jsonResponse(localManifest) } }) });
   assert.equal(local.app.repository, null);
   assert.equal(local.doc.getElementById("repo-chip").hidden, true);
   await local.app.navigate("#/steps/publish-github-pages");
