@@ -8,8 +8,13 @@
  * navegador («Actualizar desde el repositorio»), así que las reglas son las
  * mismas en el CI y en vivo:
  *
- *   documents/steps/**\/{titulo}.steps.md  → type: "steps"
- *   documents/tests/**\/{titulo}.test.md   → type: "test"
+ *   documents/steps/**\/{titulo}.steps.md  → type "steps"
+ *       kind: "procedure"  (por defecto) → Procedimiento
+ *       kind: "lab-guide"                → Guía de laboratorio
+ *   documents/tests/**\/{titulo}.test.md   → type "test" → Prueba de práctica
+ *
+ * Cualquier otro Markdown dentro de /documents es un error: o sigue el
+ * formato o no se publica nada.
  */
 
 import {
@@ -22,27 +27,32 @@ import {
   markdownOf,
   expandTokens,
   isSafeUrl,
-  isSafeRelativePath,
-  resolveRelativePath,
-  dirname,
   plainText,
   stripTitlePlaceholder,
+  isKnownAttribute,
+  DIRECTIVE_RULES,
+  ID_RE,
 } from "./markdown.js";
 import { validateAgainstSchema } from "./schema.js";
 import { ICON_NAMES } from "./icons.js";
 import { buildStepsModel } from "./steps.js";
-import { buildTestModel, summarizeCases, deriveOverallStatus, TEST_STATUSES, SUMMARY_KEYS } from "./tests.js";
+import { buildQuizModel, QUESTION_TYPES, DEFAULT_PASSING_SCORE } from "./quiz.js";
+
+export { ID_RE };
 
 export const DOCUMENT_TYPES = Object.freeze({
   steps: Object.freeze({ type: "steps", suffix: ".steps.md", folder: "documents/steps", route: "steps", mode: "steps" }),
   test: Object.freeze({ type: "test", suffix: ".test.md", folder: "documents/tests", route: "tests", mode: "tests" }),
 });
 
+/** Categorías visibles, en orden de presentación, con el tipo de archivo que las contiene. */
+export const CATEGORIES = Object.freeze(["procedure", "lab-guide", "practice-test"]);
+const CATEGORY_TYPES = Object.freeze({ procedure: "steps", "lab-guide": "steps", "practice-test": "test" });
+export const STEPS_KINDS = Object.freeze(["procedure", "lab-guide"]);
+export const LEVELS = Object.freeze(["beginner", "intermediate", "advanced"]);
+
 export const MODES = Object.freeze(["all", "steps", "tests"]);
 export const FILE_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*\.(?:steps|test)\.md$/;
-export const ID_RE = /^[A-Za-z0-9][\w-]*$/;
-export const IMAGE_EXTENSIONS = Object.freeze(["png", "jpg", "jpeg", "gif", "webp", "avif", "svg"]);
-export const EVIDENCE_TYPES = Object.freeze(["link", "image"]);
 
 /** Valores de ejemplo para validar URLs con tokens sin conocer el repositorio real. */
 const SAMPLE_TOKENS = {
@@ -67,6 +77,30 @@ export function enabledTypes(mode) {
   return ["steps", "test"];
 }
 
+/** Categorías publicadas en un modo (en orden de presentación). */
+export function enabledCategories(mode) {
+  const types = enabledTypes(mode);
+  return CATEGORIES.filter((category) => types.includes(CATEGORY_TYPES[category]));
+}
+
+export const categoryType = (category) => CATEGORY_TYPES[category] || null;
+
+/** Categoría de una entrada del manifiesto o de un análisis. */
+export function categoryOf(entry) {
+  if (entry && CATEGORIES.includes(entry.category)) return entry.category;
+  if (!entry || entry.type === "test") return "practice-test";
+  return entry.kind === "lab-guide" ? "lab-guide" : "procedure";
+}
+
+/** `?type=` de la portada: acepta categorías y los tipos antiguos (steps/test). */
+export function normalizeCategory(value) {
+  const text = String(value || "").toLowerCase();
+  if (CATEGORIES.includes(text)) return text;
+  if (text === "steps") return "procedure";
+  if (text === "test" || text === "tests") return "practice-test";
+  return null;
+}
+
 const basename = (path) => String(path).split("/").pop();
 
 export function typeFromPath(path) {
@@ -83,6 +117,17 @@ export function isDocumentPath(path, mode = "all") {
   return String(path).startsWith(`${DOCUMENT_TYPES[type].folder}/`);
 }
 
+/**
+ * ¿Hay que revisar este archivo? Todo Markdown de /documents: los que no
+ * siguen el formato se analizan igual para informar del error.
+ */
+export function isCandidatePath(path, mode = "all") {
+  const value = String(path);
+  if (!value.startsWith("documents/") || !/\.md$/i.test(value)) return false;
+  const type = typeFromPath(value);
+  return !type || enabledTypes(mode).includes(type);
+}
+
 export function typeFromRoute(route) {
   return Object.values(DOCUMENT_TYPES).find((def) => def.route === route)?.type || null;
 }
@@ -92,10 +137,10 @@ export function routeFor(entry, anchor = "") {
   return anchor ? `${base}/${encodeURIComponent(anchor)}` : base;
 }
 
-/** Orden determinista: procedimientos primero y después por ruta. */
+/** Orden determinista: procedimientos, guías de laboratorio, pruebas; después por ruta. */
 export function sortDocuments(documents) {
-  const order = { steps: 0, test: 1 };
-  return [...documents].sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || String(a.path).localeCompare(String(b.path)));
+  const rank = (doc) => CATEGORIES.indexOf(categoryOf(doc));
+  return [...documents].sort((a, b) => rank(a) - rank(b) || String(a.path).localeCompare(String(b.path)));
 }
 
 /** Filtra un manifiesto por modo (por si se publicó con otro). */
@@ -122,21 +167,24 @@ const stripCode = (text) =>
     .replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[ \t]*$|(?![\s\S]))/gm, "")
     .replace(/`[^`\n]*`/g, "");
 
+const FORMAT_HELP = "Los documentos se llaman «{titulo}.steps.md» (procedimientos y guías de laboratorio) o «{titulo}.test.md» (pruebas de práctica).";
+
 /**
  * Analiza un documento completo.
  * @param {{path:string, source:string, yaml:{load:Function}, schemas:{steps:object,test:object},
- *          countTasks?:(text:string)=>number, languages?:string[]}} input
- * @returns {{path, type, meta, body, bodyLine, nodes, model, errors:Array, warnings:Array}}
+ *          renderer?:{countTasks:Function, listsOf:Function}, languages?:string[]}} input
+ * @returns {{path, type, category, meta, body, bodyLine, nodes, model, errors:Array, warnings:Array}}
  */
-export function analyzeDocument({ path, source, yaml, schemas, countTasks = () => 0, languages = ["es", "en"] }) {
-  const result = { path, type: null, meta: null, body: "", bodyLine: 1, nodes: [], model: null, errors: [], warnings: [] };
+export function analyzeDocument({ path, source, yaml, schemas, renderer = {}, languages = ["es", "en"] }) {
+  const countTasks = renderer.countTasks || (() => 0);
+  const result = { path, type: null, category: null, meta: null, body: "", bodyLine: 1, nodes: [], model: null, errors: [], warnings: [] };
   const error = (message, line = null) => result.errors.push({ line, message });
   const warn = (message, line = null) => result.warnings.push({ line, message });
 
   // 1. Nombre y ubicación.
   const type = typeFromPath(path);
   if (!type) {
-    error("El nombre del archivo debe terminar en «.steps.md» o «.test.md».");
+    error(`El archivo no sigue el formato: ${FORMAT_HELP} Renómbralo o sácalo de /documents.`);
     return result;
   }
   result.type = type;
@@ -155,6 +203,7 @@ export function analyzeDocument({ path, source, yaml, schemas, countTasks = () =
   const raw = splitFrontMatter(source).raw;
   const meta = front.data;
   result.meta = meta;
+  result.category = type === "test" ? "practice-test" : meta.kind === "lab-guide" ? "lab-guide" : "procedure";
   result.body = stripTitlePlaceholder(front.body);
   result.bodyLine = front.bodyLine + (front.body.split("\n").length - result.body.split("\n").length);
 
@@ -166,9 +215,13 @@ export function analyzeDocument({ path, source, yaml, schemas, countTasks = () =
     const key = issue.path.split("/")[1] || "";
     error(`front matter ${issue.path || "/"}: ${issue.message}.`, key ? lineOfKey(raw, key) : 1);
   }
-  for (const key of ["title", "description", "environment"]) {
+  for (const key of ["title", "description", "duration"]) {
     const missing = missingLanguages(meta[key], languages);
     if (missing.length) warn(`«${key}» no tiene traducción para: ${missing.join(", ")} (se mostrará otro idioma).`, lineOfKey(raw, key));
+  }
+  for (const key of ["objectives", "prerequisites"]) {
+    const missing = new Set((Array.isArray(meta[key]) ? meta[key] : []).flatMap((item) => missingLanguages(item, languages)));
+    if (missing.size) warn(`«${key}» tiene elementos sin traducción para: ${[...missing].join(", ")}.`, lineOfKey(raw, key));
   }
   (Array.isArray(meta.links) ? meta.links : []).forEach((link, i) => {
     const url = link && typeof link.url === "string" ? expandTokens(link.url, SAMPLE_TOKENS) : "";
@@ -189,24 +242,26 @@ export function analyzeDocument({ path, source, yaml, schemas, countTasks = () =
     result.model = buildStepsModel(result.nodes, { countTasks });
     if (!result.model.steps.length) error("Un documento .steps.md necesita al menos un «:::step».");
   } else {
-    result.model = buildTestModel(result.nodes);
-    if (!result.model.cases.length) error("Un documento .test.md necesita al menos un «:::testcase».");
-    const summary = summarizeCases(result.model.cases);
-    const derived = deriveOverallStatus(summary);
-    if (meta.status && TEST_STATUSES.includes(meta.status) && meta.status !== derived) {
-      warn(`El estado global declarado («${meta.status}») no coincide con el calculado a partir de los casos («${derived}»).`, lineOfKey(raw, "status"));
-    }
-    if (meta.summary && typeof meta.summary === "object") {
-      const mismatched = SUMMARY_KEYS.filter((key) => meta.summary[key] != null && meta.summary[key] !== summary[key]);
-      if (mismatched.length) warn(`summary no coincide con los casos en: ${mismatched.map((k) => `${k} (${meta.summary[k]} ≠ ${summary[k]})`).join(", ")}.`, lineOfKey(raw, "summary"));
-    }
+    if (typeof renderer.listsOf !== "function") throw new Error("analyzeDocument necesita renderer.listsOf para analizar pruebas de práctica.");
+    const quiz = buildQuizModel(result.nodes, { listsOf: renderer.listsOf, languages });
+    result.model = { questions: quiz.questions };
+    quiz.errors.forEach((e) => error(e.message, e.line));
+    if (!quiz.questions.length) error("Una prueba .test.md necesita al menos un «:::question».");
   }
   return result;
 }
 
+function allowedAttributes(name, languages) {
+  const rule = DIRECTIVE_RULES[name];
+  return [...rule.attributes, ...rule.localized.flatMap((key) => languages.map((lang) => `${key}.${lang}`))].join(", ");
+}
+
 function validateBody(result, { countTasks, languages, error, warn }) {
   const seen = new Map();
-  const docDir = dirname(result.path);
+  const strayTasks =
+    result.type === "steps"
+      ? "Hay casillas «- [ ]» fuera de un «:::step»: no cuentan para el progreso. Muévelas dentro de un paso."
+      : "Hay opciones «- [ ]» / «- [x]» fuera de un «:::question». Muévelas dentro de una pregunta.";
 
   const checkMarkdown = (text, line) => {
     const code = stripCode(text);
@@ -216,15 +271,17 @@ function validateBody(result, { countTasks, languages, error, warn }) {
     if (/\{\{\s*title\s*\}\}/.test(text)) warn("«{{ title }}» solo se admite como primera línea («# {{ title }}»).", line);
   };
 
-  const walk = (nodes) => {
+  const walk = (nodes, parent) => {
     for (const item of groupLanguageBlocks(nodes)) {
       if (item.kind === "markdown") {
         checkMarkdown(item.text, item.line);
+        if (!parent && countTasks(item.text)) error(strayTasks, item.line);
         continue;
       }
       if (item.kind === "lang-group") {
         const langs = item.variants.map(languageOf);
         item.variants.forEach((variant, i) => {
+          if (Object.keys(variant.attrs).length || variant.args.length > 1) error("«:::lang» solo lleva el idioma, p. ej. «:::lang es».", variant.line);
           if (!langs[i]) error("«:::lang» necesita un idioma, p. ej. «:::lang es».", variant.line);
           else if (!languages.includes(langs[i])) error(`Idioma no soportado «${langs[i]}» (usa: ${languages.join(", ")}).`, variant.line);
           if (langs.indexOf(langs[i]) !== i) warn(`El idioma «${langs[i]}» se repite en el mismo grupo; solo se mostrará el primero.`, variant.line);
@@ -233,14 +290,22 @@ function validateBody(result, { countTasks, languages, error, warn }) {
         const missing = languages.filter((lang) => !langs.includes(lang));
         if (missing.length && langs.some(Boolean)) warn(`Bloque de idioma sin variante para: ${missing.join(", ")} (se mostrará otra).`, item.line);
         const counts = item.variants.map((variant) => countTasks(markdownOf(variant.children)));
-        if (new Set(counts).size > 1) error(`Las variantes de idioma deben tener el mismo número de casillas «- [ ]» (hay ${counts.join(" / ")}); el progreso no depende del idioma.`, item.line);
+        if (new Set(counts).size > 1) error(`Las variantes de idioma deben tener el mismo número de casillas «- [ ]» (hay ${counts.join(" / ")}); el progreso y las respuestas no dependen del idioma.`, item.line);
+        if (!parent && counts.some(Boolean)) error(strayTasks, item.line);
         continue;
       }
 
       const node = item;
-      if (node.args.length && node.name !== "lang") warn(`Atributo sin comillas ignorado en «:::${node.name}»: ${node.args.join(" ")} (usa clave="valor").`, node.line);
+      if (DIRECTIVE_RULES[node.name]) {
+        if (node.args.length) error(`Atributo mal escrito en «:::${node.name}»: «${node.args.join(" ")}». Usa clave="valor", con comillas.`, node.line);
+        const unknown = Object.keys(node.attrs).filter((key) => !isKnownAttribute(node.name, key));
+        if (unknown.length) {
+          const allowed = allowedAttributes(node.name, languages);
+          error(`Atributo desconocido en «:::${node.name}»: ${unknown.join(", ")}${allowed ? ` (permitidos: ${allowed})` : " (esta directiva no lleva atributos)"}.`, node.line);
+        }
+      }
 
-      if (["step", "substep", "testcase"].includes(node.name)) {
+      if (node.name === "step" || node.name === "substep") {
         const id = node.attrs.id;
         if (!id) error(`«:::${node.name}» necesita un atributo id="…".`, node.line);
         else if (!ID_RE.test(id)) error(`id inválido «${id}»: usa letras, números, guiones o guiones bajos.`, node.line);
@@ -254,46 +319,10 @@ function validateBody(result, { countTasks, languages, error, warn }) {
           if (missing.length) warn(`El título de «${id || node.name}» no tiene traducción para: ${missing.join(", ")}.`, node.line);
         }
       }
-
-      if (node.name === "testcase") {
-        const status = String(node.attrs.status || "").toLowerCase();
-        if (!status) warn(`El caso «${node.attrs.id || "?"}» no declara status; se mostrará como «not-run».`, node.line);
-        else if (!TEST_STATUSES.includes(status)) error(`status inválido «${node.attrs.status}» (usa: ${TEST_STATUSES.join(", ")}).`, node.line);
-      }
-
-      if (node.name === "evidence") validateEvidence(node, { docDir, error, warn });
-      walk(node.name === "evidence" ? [] : node.children);
+      walk(node.children, node);
     }
   };
-  walk(result.nodes);
-}
-
-function validateEvidence(node, { docDir, error, warn }) {
-  const type = String(node.attrs.type || "").toLowerCase();
-  const lines = markdownOf(node.children)
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const target = lines[0] || "";
-  if (!EVIDENCE_TYPES.includes(type)) error(`«:::evidence» necesita type="link" o type="image" (recibido «${node.attrs.type || ""}»).`, node.line);
-  if (!localizedAttribute(node.attrs, "label")) warn("La evidencia no tiene etiqueta (label.es / label.en).", node.line);
-  if (lines.length > 1) warn("La evidencia solo usa la primera línea no vacía; el resto se ignora.", node.line);
-  if (!target) {
-    error("La evidencia está vacía: escribe la URL o la ruta en la primera línea.", node.line);
-    return;
-  }
-  const expanded = expandTokens(target, SAMPLE_TOKENS);
-  if (type === "link" && !(isSafeUrl(expanded, { schemes: ["http", "https"] }) && (/^https?:\/\//i.test(expanded) || isSafeRelativePath(expanded)))) {
-    error(`Evidencia de enlace no permitida «${target}»: usa http(s) o una ruta relativa.`, node.line);
-  }
-  if (type === "image") {
-    const ext = expanded.split(/[?#]/)[0].split(".").pop().toLowerCase();
-    if (!isSafeRelativePath(expanded) || resolveRelativePath(docDir, expanded) == null) {
-      error(`La imagen de evidencia debe ser una ruta relativa dentro del sitio (recibido «${target}»).`, node.line);
-    } else if (!IMAGE_EXTENSIONS.includes(ext)) {
-      error(`Extensión de imagen no permitida «.${ext}» (usa: ${IMAGE_EXTENSIONS.join(", ")}).`, node.line);
-    }
-  }
+  walk(result.nodes, null);
 }
 
 /** Slugs repetidos entre todos los documentos analizados. */
@@ -317,6 +346,7 @@ export function buildManifestEntry(result, { hash = "", size = 0, rawUrl = "" } 
   const meta = result.meta;
   const entry = {
     type: result.type,
+    category: result.category,
     slug: meta.slug,
     path: result.path,
     title: meta.title,
@@ -327,15 +357,19 @@ export function buildManifestEntry(result, { hash = "", size = 0, rawUrl = "" } 
     tags: Array.isArray(meta.tags) ? meta.tags : [],
     reset: meta.reset !== false,
   };
+  if (meta.duration) entry.duration = meta.duration;
+  if (meta.level) entry.level = meta.level;
   if (result.type === "steps") {
+    entry.kind = result.category;
     entry.stepCount = result.model.steps.length;
     entry.taskCount = result.model.leaves.length;
   } else {
-    const summary = summarizeCases(result.model.cases);
-    entry.status = meta.status || deriveOverallStatus(summary);
-    entry.executedAt = meta.executedAt || "";
-    entry.environment = meta.environment || "";
-    entry.summary = summary;
+    const questions = result.model.questions;
+    entry.questionCount = questions.length;
+    entry.points = questions.reduce((sum, q) => sum + q.points, 0);
+    entry.passingScore = Number.isInteger(meta.passingScore) ? meta.passingScore : DEFAULT_PASSING_SCORE;
+    entry.feedback = meta.feedback === "end" ? "end" : "immediate";
+    entry.questionTypes = QUESTION_TYPES.filter((type) => questions.some((q) => q.type === type));
   }
   entry.hash = hash;
   entry.size = size;
@@ -345,12 +379,32 @@ export function buildManifestEntry(result, { hash = "", size = 0, rawUrl = "" } 
 }
 
 /**
+ * Entrada para un documento con errores (solo en la lectura en vivo): la
+ * portada la muestra en «Documentos con errores de formato».
+ */
+export function invalidEntry(result, { rawUrl = "" } = {}) {
+  const name = basename(result.path);
+  const entry = {
+    type: result.type || typeFromPath(result.path) || "steps",
+    category: result.category || categoryOf({ type: result.type || typeFromPath(result.path) }),
+    slug: (result.meta && typeof result.meta.slug === "string" && result.meta.slug) || name.replace(/(\.(steps|test))?\.md$/i, ""),
+    path: result.path,
+    title: name,
+    invalid: true,
+    errors: result.errors.map(({ line, message }) => ({ line, message })),
+  };
+  if (rawUrl) entry.rawUrl = rawUrl;
+  return entry;
+}
+
+/**
  * @param {{documents:Array, repository?:object|null, mode?:string, generatedAt?:string, generator?:object}} input
  */
 export function buildManifest({ documents, repository = null, mode = "all", generatedAt = new Date().toISOString(), generator = {} }) {
   const sorted = sortDocuments(documents);
+  const count = (category) => sorted.filter((d) => categoryOf(d) === category).length;
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generator: {
       name: "docpages",
       author: "Jose Eduardo Romero Jimenez",
@@ -361,10 +415,7 @@ export function buildManifest({ documents, repository = null, mode = "all", gene
     source: "deployment",
     mode: normalizeMode(mode),
     repository,
-    counts: {
-      steps: sorted.filter((d) => d.type === "steps").length,
-      tests: sorted.filter((d) => d.type === "test").length,
-    },
+    counts: { procedures: count("procedure"), labGuides: count("lab-guide"), practiceTests: count("practice-test") },
     documents: sorted,
   };
 }

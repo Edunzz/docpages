@@ -8,10 +8,11 @@
  *   node scripts/build-manifest.mjs --out _site/documents.manifest.json
  *   node scripts/build-manifest.mjs --repository owner/name   (solo para pruebas locales)
  *
- * - Recorre documents/steps/**\/*.steps.md y documents/tests/**\/*.test.md
- *   (según DOCUMENTATION_MODE en assets/js/config.js).
- * - Valida cada documento y los slugs; si algo falla, no escribe nada y
- *   termina con código 1.
+ * - Recorre todos los Markdown de /documents (según DOCUMENTATION_MODE en
+ *   assets/js/config.js): procedimientos y guías (.steps.md) y pruebas de
+ *   práctica (.test.md).
+ * - Valida cada documento y los slugs; si algo falla (incluido un Markdown
+ *   que no sigue el formato), no escribe nada y termina con código 1.
  * - En GitHub Actions toma el repositorio de GITHUB_REPOSITORY, GITHUB_SHA y
  *   GITHUB_REF_NAME (y la URL de Pages de PAGES_BASE_URL). En local deja
  *   `repository: null`: el navegador lo deduce de la URL.
@@ -59,7 +60,8 @@ if (isMain(import.meta.url)) {
     await mkdir(path.dirname(out), { recursive: true });
     await writeFile(out, JSON.stringify(manifest, null, 2) + "\n", "utf8");
     const repo = manifest.repository ? `${manifest.repository.owner}/${manifest.repository.name}` : "sin repositorio (se detecta en el navegador)";
-    console.log(`✔ ${path.relative(ROOT, out)} · modo ${manifest.mode} · ${manifest.counts.steps} procedimiento(s), ${manifest.counts.tests} prueba(s) · ${repo}`);
+    const { procedures, labGuides, practiceTests } = manifest.counts;
+    console.log(`✔ ${path.relative(ROOT, out)} · modo ${manifest.mode} · ${procedures} procedimiento(s), ${labGuides} guía(s) de laboratorio, ${practiceTests} prueba(s) de práctica · ${repo}`);
   } catch (error) {
     if (error instanceof ManifestError) {
       console.error(error.report);

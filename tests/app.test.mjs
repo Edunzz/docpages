@@ -8,14 +8,42 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
 import { bootApp, siteFetch, jsonResponse, memoryStorage, runAxe, tick } from "./helpers.mjs";
+import { VALID_TEST, withFrontMatter, makeSite, quizWith } from "./fixtures.mjs";
+import { generateManifest } from "../scripts/build-manifest.mjs";
 
-const STEPS_KEY = "docpages:owner/docpages:publish-github-pages:1.0.0:steps";
-const TEST_KEY = "docpages:owner/docpages:site-validation:1.0.0:test";
+const STEPS_KEY = "docpages:owner/docpages:publish-github-pages:1.1.0:steps";
+const QUIZ_KEY = "docpages:owner/docpages:docpages-basics:1.0.0:test";
+const RAW = "https://raw.githubusercontent.com/owner/docpages/refs/heads/main/";
+const PAGES = "https://owner.github.io/docpages/";
 
 const visibleCards = (doc) => [...doc.querySelectorAll(".card")].filter((card) => !card.hidden).map((card) => card.dataset.slug);
+const buttonWith = (root, pattern) => [...root.querySelectorAll("button")].find((b) => pattern.test(b.textContent));
 
-test("portada: lista procedimientos y pruebas y detecta el repositorio desde la URL de Pages", async () => {
+/** Atajos para responder preguntas en el DOM. */
+function quizHelpers(doc, win) {
+  const question = (id) => doc.getElementById(`question-${id}`);
+  return {
+    question,
+    choose(id, text) {
+      const label = [...question(id).querySelectorAll("label.choice")].find((l) => l.querySelector(".choice__text").textContent.trim() === text);
+      assert.ok(label, `opción «${text}» en ${id}`);
+      label.querySelector("input").click();
+    },
+    type(id, value) {
+      const input = question(id).querySelector(".answer-input");
+      input.value = value;
+      input.dispatchEvent(new win.Event("input"));
+    },
+    check(id) {
+      buttonWith(question(id).querySelector(".question__actions"), /Comprobar|Check/).click();
+    },
+  };
+}
+
+test("portada: tres categorías y repositorio detectado desde la URL de Pages", async () => {
   const { doc, app } = await bootApp();
   assert.equal(app.repository.fullName, "owner/docpages");
   assert.equal(app.repository.source, "location");
@@ -25,13 +53,29 @@ test("portada: lista procedimientos y pruebas y detecta el repositorio desde la 
   assert.equal(chip.getAttribute("href"), "https://github.com/owner/docpages");
   assert.equal(chip.getAttribute("rel"), "noopener noreferrer");
 
-  assert.ok(doc.querySelector(".doc-section--steps"), "sección de procedimientos");
-  assert.ok(doc.querySelector(".doc-section--test"), "sección de pruebas");
-  assert.deepEqual(visibleCards(doc).sort(), ["publish-github-pages", "site-validation"]);
+  assert.deepEqual([...doc.querySelectorAll(".doc-section")].map((s) => s.dataset.category), ["procedure", "lab-guide", "practice-test"]);
+  assert.deepEqual([...doc.querySelectorAll(".doc-section .section-title")].map((h) => h.textContent.replace(/\d+$/, "")), ["Procedimientos", "Guías de laboratorio", "Pruebas de práctica"]);
+  assert.deepEqual(visibleCards(doc), ["publish-github-pages", "first-practice-test-lab", "docpages-basics"]);
+  assert.match(doc.querySelector(".card--lab-guide .card__type").textContent, /Guía de laboratorio/);
+  assert.match(doc.querySelector(".card--practice-test .card__status-text").textContent, /Sin intentar/);
+  assert.match(doc.querySelector(".card--practice-test .card__meta").textContent, /8 preguntas/);
+
+  doc.querySelector('.segmented__option[data-category="lab-guide"]').click();
+  assert.deepEqual(visibleCards(doc), ["first-practice-test-lab"]);
+  assert.equal(doc.querySelector(".doc-section--procedure").hidden, true);
+
   const viewRepo = [...doc.querySelectorAll(".hero__actions a")].find((a) => a.textContent.includes("Ver repositorio"));
   assert.equal(viewRepo.getAttribute("href"), "https://github.com/owner/docpages");
   assert.match(doc.querySelector(".site-footer__credit").textContent, /Jose Eduardo Romero Jimenez/);
   assert.equal(doc.title, "Documentación");
+});
+
+test("portada: ?type= filtra por categoría (también con los nombres antiguos)", async () => {
+  const { doc, app } = await bootApp();
+  await app.navigate("#/?type=practice-test");
+  assert.deepEqual(visibleCards(doc), ["docpages-basics"]);
+  await app.navigate("#/?type=steps");
+  assert.deepEqual(visibleCards(doc), ["publish-github-pages"]);
 });
 
 test("portada: la búsqueda filtra por título, etiqueta y contenido, sin distinguir tildes", async () => {
@@ -42,10 +86,10 @@ test("portada: la búsqueda filtra por título, etiqueta y contenido, sin distin
     input.dispatchEvent(new win.Event("input"));
     return visibleCards(doc);
   };
-  assert.deepEqual(search("accessibility"), ["site-validation"]);
-  assert.deepEqual(search("Publicar"), ["publish-github-pages"]);
+  assert.deepEqual(search("quiz"), ["docpages-basics"]);
+  assert.deepEqual(search("FUNDAMENTOS practica"), ["docpages-basics"]);
   assert.deepEqual(search("fork"), ["publish-github-pages"]);
-  assert.deepEqual(search("CONCLUSION"), ["site-validation"]);
+  assert.deepEqual(search("master"), ["first-practice-test-lab"]);
   assert.deepEqual(search("zzz-sin-resultados"), []);
   assert.match(doc.getElementById("search-status").textContent, /0 resultados/);
 });
@@ -59,13 +103,15 @@ test("idioma: el selector cambia la interfaz, <html lang> y persiste la preferen
   assert.equal(doc.documentElement.lang, "en");
   assert.equal(storage.getItem("docpages:lang"), "en");
   assert.equal(doc.getElementById("brand-title").textContent, "Documentation");
-  assert.match(doc.querySelector("#section-steps").textContent, /Procedures/);
+  assert.match(doc.querySelector("#section-procedure").textContent, /Procedures/);
+  assert.match(doc.querySelector("#section-lab-guide").textContent, /Lab guides/);
+  assert.match(doc.querySelector("#section-practice-test").textContent, /Practice tests/);
   assert.equal(doc.querySelector('[data-lang="en"]').getAttribute("aria-pressed"), "true");
 
   // Una visita nueva respeta la preferencia guardada aunque el navegador esté en español.
   const second = await bootApp({ storage, languages: ["es-MX"] });
   assert.equal(second.doc.documentElement.lang, "en");
-  assert.match(second.doc.querySelector(".card--steps .card__link").textContent, /Publish documentation/);
+  assert.match(second.doc.querySelector(".card--procedure .card__link").textContent, /Publish documentation/);
   win.close();
 });
 
@@ -79,10 +125,14 @@ test("procedimiento: pasos, subpasos, progreso persistente y reinicio", async ()
   const { doc, app } = await bootApp({ storage });
   await app.navigate("#/steps/publish-github-pages");
 
+  assert.match(doc.querySelector(".doc-header .eyebrow").textContent, /Procedimiento/);
+  assert.match(doc.querySelector(".facts").textContent, /15 minutos/);
+  assert.match(doc.querySelector(".facts").textContent, /Básico/);
   assert.equal(doc.querySelectorAll(".stepper__item").length, 5);
   assert.equal(doc.querySelectorAll(".step").length, 5);
   assert.equal(doc.querySelectorAll(".substep").length, 4);
   assert.equal(doc.querySelector(".doc-progress__value").textContent.replace(/\s/g, ""), "0%");
+  assert.match(doc.querySelector(".doc-progress").textContent, /Progreso del procedimiento/);
 
   // Enlaces iniciales con tokens resueltos al repositorio detectado.
   const links = [...doc.querySelectorAll(".doc-links a")].map((a) => a.getAttribute("href"));
@@ -138,56 +188,187 @@ test("procedimiento: el bloque :::lang sigue el idioma sin cambiar las claves de
   assert.equal(doc.querySelector('.task-check[data-key="prepare-branch#1"]').checked, true);
 });
 
-test("prueba: veredicto, resumen, filtro por estado, evidencia y re-ejecución local", async () => {
+test("guía de laboratorio: objetivos, requisitos, duración, nivel y progreso propio", async () => {
+  const storage = memoryStorage();
+  const { doc, app } = await bootApp({ storage });
+  await app.navigate("#/steps/first-practice-test-lab");
+
+  assert.match(doc.querySelector(".doc-header .eyebrow").textContent, /Guía de laboratorio/);
+  assert.ok(doc.querySelector('.breadcrumb a[href="#/?type=lab-guide"]'));
+  assert.equal(doc.querySelectorAll(".brief--objectives li").length, 3);
+  assert.equal(doc.querySelectorAll(".brief--prerequisites li").length, 2);
+  assert.match(doc.querySelector(".facts").textContent, /30 minutos/);
+  assert.match(doc.querySelector(".doc-progress").textContent, /Progreso del laboratorio/);
+  assert.equal(doc.querySelector(".stepper").getAttribute("aria-label"), "Pasos del laboratorio");
+
+  // Un enlace inicial a otro documento se convierte en ruta interna.
+  const quizLink = [...doc.querySelectorAll(".doc-links a")].find((a) => a.textContent.includes("Prueba de ejemplo"));
+  assert.equal(quizLink.getAttribute("href"), "#/tests/docpages-basics");
+
+  for (const step of doc.querySelectorAll(".step")) step.querySelector(".step__actions .btn--primary").click();
+  assert.equal(doc.querySelector(".completion").hidden, false);
+  assert.match(doc.querySelector(".completion__title").textContent, /Laboratorio completado/);
+
+  await app.navigate("#/");
+  assert.match(doc.querySelector('.card[data-slug="first-practice-test-lab"] .card__status-text').textContent, /100/);
+});
+
+test("prueba de práctica: responder, comprobar, pista, explicación, puntuación y resultado", async () => {
   const storage = memoryStorage();
   const { doc, win, app } = await bootApp({ storage });
-  await app.navigate("#/tests/site-validation");
+  await app.navigate("#/tests/docpages-basics");
+  const { question, choose, type, check } = quizHelpers(doc, win);
 
-  assert.match(doc.querySelector(".verdict__value").textContent, /Parcial/);
-  const stats = Object.fromEntries([...doc.querySelectorAll(".stat")].map((s) => [s.querySelector(".stat__label").textContent, s.querySelector(".stat__value").textContent]));
-  assert.deepEqual(stats, { Aprobados: "4", Fallidos: "0", Bloqueados: "0", Parciales: "0", Total: "5" });
-  assert.equal(doc.querySelector(".notice--warning"), null, "el summary declarado coincide con los casos");
+  assert.match(doc.querySelector(".doc-header .eyebrow").textContent, /Prueba de práctica/);
+  assert.deepEqual([...doc.querySelectorAll(".question")].map((s) => s.dataset.type), ["single", "true-false", "multiple", "text", "number", "order", "match", "single"]);
+  assert.match(doc.querySelector(".facts").textContent, /70\s?%/);
 
-  // Evidencia: imagen relativa resuelta contra el documento y enlace con token.
-  const img = doc.querySelector(".evidence--image img");
-  assert.equal(img.getAttribute("src"), "https://owner.github.io/docpages/documents/tests/evidence/home-overview.svg");
-  const pagesLink = doc.querySelector("#case-pages-deploy .evidence__link");
-  assert.equal(pagesLink.getAttribute("href"), "https://owner.github.io/docpages/");
-  assert.equal(pagesLink.getAttribute("target"), "_blank");
+  // Comprobar sin responder: aviso y nada se guarda como comprobado.
+  check("suffix");
+  assert.equal(question("suffix").querySelector(".question__notice").hidden, false);
 
-  // Campos Esperado / Obtenido.
-  assert.equal(doc.querySelectorAll("#case-home-loads .case__field").length, 2);
+  // Opción única correcta: se bloquea y aparece la explicación.
+  choose("suffix", ".steps.md");
+  check("suffix");
+  assert.equal(question("suffix").dataset.result, "correct");
+  assert.match(question("suffix").querySelector(".question__feedback").textContent, /¡Correcto!/);
+  assert.doesNotMatch(question("suffix").querySelector(".question__feedback").textContent, /null|undefined/);
+  assert.equal(question("suffix").querySelector(".question__explanation").hidden, false);
+  assert.ok(question("suffix").querySelector("input").disabled);
 
-  // Filtro.
-  doc.querySelector('.chip--filter[data-filter="not-run"]').click();
-  const visible = [...doc.querySelectorAll(".case")].filter((c) => !c.hidden).map((c) => c.dataset.id);
-  assert.deepEqual(visible, ["pages-deploy"]);
-  assert.equal(JSON.parse(storage.getItem(TEST_KEY)).filter, "not-run");
+  // Verdadero o falso incorrecta: se marcan la elegida y la correcta; se puede volver a responder.
+  choose("storage", "Verdadero");
+  check("storage");
+  assert.equal(question("storage").dataset.result, "incorrect");
+  assert.match(question("storage").querySelector(".choice.is-wrong").textContent, /Verdadero.*tu respuesta, incorrecta/);
+  assert.match(question("storage").querySelector(".choice.is-correct").textContent, /Falso.*respuesta correcta/);
+  buttonWith(question("storage"), /Volver a responder/).click();
+  choose("storage", "Falso");
+  check("storage");
+  assert.equal(question("storage").dataset.result, "correct");
 
-  // Re-ejecución local.
-  const select = doc.getElementById("local-pages-deploy");
-  select.value = "passed";
-  select.dispatchEvent(new win.Event("change"));
-  assert.deepEqual(JSON.parse(storage.getItem(TEST_KEY)).local, { "pages-deploy": "passed" });
-  assert.match(doc.querySelector(".local-summary").textContent, /1 de 5/);
+  // Opción múltiple.
+  choose("safe-links", "https://example.com");
+  choose("safe-links", "mailto:team@example.com");
+  check("safe-links");
+  assert.equal(question("safe-links").dataset.result, "correct");
 
-  // El reinicio solo borra el estado local.
+  // Respuesta corta: sin importar mayúsculas ni el punto final; la pista se despliega.
+  const hint = buttonWith(question("validate-command"), /Ver pista/);
+  hint.click();
+  assert.equal(hint.getAttribute("aria-expanded"), "true");
+  assert.equal(question("validate-command").querySelector(".question__hint").hidden, false);
+  type("validate-command", "NPM run validate.");
+  check("validate-command");
+  assert.equal(question("validate-command").dataset.result, "correct");
+
+  // Numérica incorrecta: muestra la respuesta correcta.
+  type("percent", "67");
+  check("percent");
+  assert.equal(question("percent").dataset.result, "incorrect");
+  assert.match(question("percent").querySelector(".question__feedback").textContent, /Respuesta correcta: 66/);
+
+  // Ordenar con los botones de subir.
+  const order = question("workflow-order");
+  const arrangement = () => [...order.querySelectorAll(".order__item")].map((li) => Number(li.dataset.item));
+  assert.notDeepEqual(arrangement(), [0, 1, 2, 3], "empieza desordenada");
+  for (let guard = 0; guard < 20 && arrangement().some((v, i) => v !== i); guard++) {
+    const current = arrangement();
+    const i = current.findIndex((v, idx) => idx > 0 && current[idx - 1] > v);
+    order.querySelector(`button[data-item="${current[i]}"][data-dir="up"]`).click();
+  }
+  assert.deepEqual(arrangement(), [0, 1, 2, 3]);
+  check("workflow-order");
+  assert.equal(order.dataset.result, "correct");
+
+  // Relacionar con las listas desplegables.
+  question("directives").querySelectorAll("select").forEach((select, i) => {
+    select.value = String(i);
+    select.dispatchEvent(new win.Event("change"));
+  });
+  check("directives");
+  assert.equal(question("directives").dataset.result, "correct");
+  assert.equal(JSON.parse(storage.getItem(QUIZ_KEY)).summary.score, 8);
+
+  // La última pregunta completa la prueba: aparece el resultado.
+  choose("find-the-error", "No marca la respuesta correcta con [x].");
+  check("find-the-error");
+  const results = doc.querySelector(".quiz-results");
+  assert.equal(results.hidden, false);
+  assert.match(results.textContent, /90\s?%/);
+  assert.match(results.textContent, /Aprobado/);
+  assert.deepEqual([...results.querySelectorAll(".quiz-results__review a")].map((a) => a.getAttribute("href")), ["#/tests/docpages-basics/percent"]);
+  const saved = JSON.parse(storage.getItem(QUIZ_KEY));
+  assert.deepEqual([saved.attempts, saved.best, saved.summary.passed], [1, 90, true]);
+
+  // La portada muestra el último resultado.
+  await app.navigate("#/");
+  const card = doc.querySelector('.card[data-slug="docpages-basics"]');
+  assert.match(card.textContent, /Aprobado/);
+  assert.match(card.textContent, /Último resultado: 90/);
+
+  // Al volver se conserva; «Intentar de nuevo» limpia las respuestas y conserva el mejor resultado.
+  await app.navigate("#/tests/docpages-basics");
+  assert.equal(doc.querySelector(".quiz-results").hidden, false);
+  buttonWith(doc.querySelector(".quiz-results"), /Intentar de nuevo/).click();
+  const retried = JSON.parse(storage.getItem(QUIZ_KEY));
+  assert.deepEqual([retried.answers, retried.best, retried.attempts], [{}, 90, 1]);
+  assert.equal(doc.querySelector(".quiz-results").hidden, true);
+  assert.equal(question("suffix").querySelector("input").disabled, false);
+  assert.match(doc.querySelector(".quiz-score__best").textContent, /Mejor resultado: 90/);
+
+  // «Reiniciar» lo borra todo.
   const reset = doc.querySelector(".btn--reset");
   reset.click();
   reset.click();
-  assert.equal(storage.getItem(TEST_KEY), null);
-  assert.equal([...doc.querySelectorAll(".case")].filter((c) => !c.hidden).length, 5);
-  assert.match(doc.querySelector(".verdict__value").textContent, /Parcial/);
+  assert.equal(storage.getItem(QUIZ_KEY), null);
 });
 
-test("accesibilidad: sin infracciones de axe-core en portada, procedimiento y prueba (es y en)", async () => {
+test("prueba de práctica: el idioma cambia preguntas y opciones sin perder las respuestas", async () => {
+  const storage = memoryStorage();
+  const { doc, win, app } = await bootApp({ storage });
+  await app.navigate("#/tests/docpages-basics");
+  const { question, choose } = quizHelpers(doc, win);
+  choose("find-the-error", "No marca la respuesta correcta con [x].");
+  doc.querySelector('[data-lang="en"]').click();
+  await tick();
+  assert.match(question("find-the-error").querySelector(".question__prompt").textContent, /This question fails validation/);
+  const chosen = [...question("find-the-error").querySelectorAll("label.choice")].find((l) => l.querySelector("input").checked);
+  assert.match(chosen.textContent, /It does not mark the correct answer/);
+  assert.match(question("storage").textContent, /True/);
+});
+
+test("prueba con corrección al final: sin «Comprobar»; «Finalizar» pide confirmar si faltan respuestas", async () => {
+  const root = await makeSite({ "documents/tests/prueba-x.test.md": withFrontMatter(VALID_TEST, "feedback", '"end"') }, { copySite: true });
+  await writeFile(path.join(root, "documents.manifest.json"), JSON.stringify(await generateManifest({ root, env: {} })));
+  const { doc, win, app } = await bootApp({ fetchImpl: siteFetch({ root }) });
+  await app.navigate("#/tests/prueba-x");
+  const { question, choose } = quizHelpers(doc, win);
+
+  assert.equal(doc.querySelectorAll(".question__actions .btn--primary").length, 0, "no hay botón «Comprobar»");
+  choose("q-single", "Lima");
+  assert.match(doc.querySelector(".quiz-score").textContent, /Avance/);
+  const finish = doc.querySelector(".quiz-finish button");
+  finish.click();
+  assert.match(doc.querySelector(".quiz-finish__status").textContent, /Faltan 6 preguntas/);
+  assert.equal(doc.querySelector(".quiz-results").hidden, true, "el primer clic solo pide confirmación");
+  finish.click();
+  assert.equal(doc.querySelector(".quiz-results").hidden, false);
+  assert.equal(question("q-single").dataset.result, "correct");
+  assert.match(question("q-tf").querySelector(".question__feedback").textContent, /Sin responder/);
+  assert.match(question("q-text").querySelector(".question__feedback").textContent, /Respuesta correcta: Lima/);
+  assert.match(doc.querySelector(".quiz-results").textContent, /25\s?%/);
+  assert.match(doc.querySelector(".quiz-results").textContent, /No aprobado/);
+});
+
+test("accesibilidad: sin infracciones de axe-core en todas las vistas (es y en)", async () => {
   const { doc, win, app } = await bootApp();
   for (const lang of ["es", "en"]) {
     if (lang === "en") {
       doc.querySelector('[data-lang="en"]').click();
       await tick();
     }
-    for (const route of ["#/", "#/steps/publish-github-pages", "#/tests/site-validation"]) {
+    for (const route of ["#/", "#/steps/publish-github-pages", "#/steps/first-practice-test-lab", "#/tests/docpages-basics"]) {
       await app.navigate(route);
       const violations = await runAxe(win);
       assert.deepEqual(violations, [], `${lang} ${route}: ${JSON.stringify(violations, null, 2)}`);
@@ -199,6 +380,23 @@ test("accesibilidad: sin infracciones de axe-core en portada, procedimiento y pr
   assert.equal(doc.querySelector(".skip-link").getAttribute("href"), "#main");
 });
 
+test("accesibilidad: prueba con preguntas corregidas, pista abierta y resultado final", async () => {
+  const { doc, win, app } = await bootApp();
+  await app.navigate("#/tests/docpages-basics");
+  const { question, choose, check } = quizHelpers(doc, win);
+  choose("suffix", ".test.md");
+  check("suffix");
+  buttonWith(question("validate-command"), /Ver pista/).click();
+  const finish = doc.querySelector(".quiz-finish button");
+  finish.click();
+  assert.deepEqual(await runAxe(win), [], "con confirmación pendiente");
+  finish.click();
+  assert.equal(doc.querySelector(".quiz-results").hidden, false);
+  assert.equal(doc.activeElement, doc.getElementById("quiz-results-title"), "el foco va al resultado");
+  const violations = await runAxe(win);
+  assert.deepEqual(violations, [], JSON.stringify(violations, null, 2));
+});
+
 test("API de GitHub no disponible: se conserva el manifiesto del despliegue y se informa", async () => {
   const fetchImpl = siteFetch({
     routes: {
@@ -208,12 +406,11 @@ test("API de GitHub no disponible: se conserva el manifiesto del despliegue y se
     },
   });
   const { doc, app } = await bootApp({ fetchImpl });
-  const refresh = [...doc.querySelectorAll(".hero__actions button")].find((b) => /Actualizar/.test(b.textContent));
-  refresh.click();
+  buttonWith(doc.querySelector(".hero__actions"), /Actualizar/).click();
   await tick(80);
   assert.match(doc.querySelector(".notice--error").textContent, /No hay conexión con GitHub/);
   assert.equal(app.manifest.source, "deployment");
-  assert.equal(visibleCards(doc).length, 2);
+  assert.equal(visibleCards(doc).length, 3);
 });
 
 test("API de GitHub con límite de solicitudes: mensaje específico y fallback", async () => {
@@ -223,11 +420,14 @@ test("API de GitHub con límite de solicitudes: mensaje específico y fallback",
     },
   });
   const { doc, app } = await bootApp({ fetchImpl });
-  [...doc.querySelectorAll(".hero__actions button")].find((b) => /Actualizar/.test(b.textContent)).click();
+  buttonWith(doc.querySelector(".hero__actions"), /Actualizar/).click();
   await tick(80);
   assert.match(doc.querySelector(".notice--error").textContent, /límite de solicitudes/);
   assert.equal(app.manifest.source, "deployment");
 });
+
+const liveTree = (paths) => jsonResponse({ sha: "abc", truncated: false, tree: paths.map((p) => ({ path: p, type: "blob" })) });
+const repoInfo = () => jsonResponse({ name: "docpages", owner: { login: "owner" }, private: false, default_branch: "main" });
 
 test("actualización en vivo: lee el árbol público, valida y cambia la fuente durante la sesión", async () => {
   const deployedFetch = siteFetch();
@@ -235,37 +435,70 @@ test("actualización en vivo: lee el árbol público, valida y cambia la fuente 
   const fetchImpl = siteFetch({
     routes: {
       "https://api.github.com/repos/owner/docpages/git/trees/": () =>
-        jsonResponse({ sha: "abc", truncated: false, tree: [{ path: "documents/steps/example.steps.md", type: "blob" }, { path: "documents/tests/example.test.md", type: "blob" }, { path: "README.md", type: "blob" }] }),
-      "https://api.github.com/repos/owner/docpages": () => jsonResponse({ name: "docpages", owner: { login: "Owner" }, private: false, default_branch: "main" }),
-      "https://raw.githubusercontent.com/owner/docpages/refs/heads/main/": (url) => deployedFetch(url.href.replace("https://raw.githubusercontent.com/owner/docpages/refs/heads/main/", "https://owner.github.io/docpages/")),
+        liveTree(["documents/steps/publish-github-pages.steps.md", "documents/steps/first-practice-test-lab.steps.md", "documents/tests/docpages-basics.test.md", "README.md"]),
+      "https://api.github.com/repos/owner/docpages": repoInfo,
+      [RAW]: (url) => deployedFetch(url.href.replace(RAW, PAGES)),
     },
   });
   const { doc, app } = await bootApp({ fetchImpl, session });
-  [...doc.querySelectorAll(".hero__actions button")].find((b) => /Actualizar/.test(b.textContent)).click();
-  await tick(120);
-  assert.match(doc.querySelector(".notice--success").textContent, /Se cargaron 2 documentos/);
+  buttonWith(doc.querySelector(".hero__actions"), /Actualizar/).click();
+  await tick(150);
+  assert.match(doc.querySelector(".notice--success").textContent, /Se cargaron 3 documentos/);
   assert.equal(app.manifest.source, "github");
   assert.match(doc.querySelector(".hero__source").textContent, /En vivo desde GitHub/);
   assert.ok(session.getItem("docpages:owner/docpages:live-manifest"));
+  assert.equal(doc.querySelector(".invalid-docs"), null);
 
   await app.navigate("#/steps/publish-github-pages");
   assert.equal(doc.querySelectorAll(".step").length, 5, "el documento se lee desde raw.githubusercontent.com");
-  assert.ok(fetchImpl.calls.some((u) => u.startsWith("https://raw.githubusercontent.com/owner/docpages/refs/heads/main/documents/steps/")));
+  assert.ok(fetchImpl.calls.some((u) => u.startsWith(`${RAW}documents/steps/`)));
 });
 
-test("modo steps: solo procedimientos; la ruta de pruebas queda deshabilitada", async () => {
+test("actualización en vivo: lo que no sigue el formato se muestra con sus errores y su línea", async () => {
+  const deployedFetch = siteFetch();
+  const broken = quizWith(':::question type="single"\n¿Cuánto es 2 + 2?\n- [ ] 3\n- [ ] 4\n:::');
+  const fetchImpl = siteFetch({
+    routes: {
+      "https://api.github.com/repos/owner/docpages/git/trees/": () => liveTree(["documents/steps/publish-github-pages.steps.md", "documents/tests/roto.test.md", "documents/notas.md", "documents/tests/img/x.png"]),
+      "https://api.github.com/repos/owner/docpages": repoInfo,
+      [`${RAW}documents/tests/roto.test.md`]: () => new Response(broken),
+      [`${RAW}documents/notas.md`]: () => new Response("# Notas sueltas\n"),
+      [RAW]: (url) => deployedFetch(url.href.replace(RAW, PAGES)),
+    },
+  });
+  const { doc, app } = await bootApp({ fetchImpl });
+  buttonWith(doc.querySelector(".hero__actions"), /Actualizar/).click();
+  await tick(150);
+
+  assert.match(doc.querySelector(".notice--error").textContent, /2 documentos no siguen el formato/);
+  const invalid = doc.querySelector(".invalid-docs");
+  assert.ok(invalid, "sección de documentos con errores");
+  assert.deepEqual([...invalid.querySelectorAll(".invalid-doc__path code")].map((c) => c.textContent), ["documents/notas.md", "documents/tests/roto.test.md"]);
+  assert.match(invalid.textContent, /El archivo no sigue el formato/);
+  assert.match(invalid.textContent, /línea 10/);
+  assert.match(invalid.textContent, /exactamente una opción correcta/);
+  assert.equal(invalid.querySelector(".invalid-doc__source").getAttribute("href"), "https://github.com/owner/docpages/blob/main/documents/notas.md");
+  assert.deepEqual(visibleCards(doc), ["publish-github-pages"], "los documentos con errores no se publican como tarjetas");
+  assert.deepEqual(await runAxe(doc.defaultView), []);
+
+  await app.navigate("#/tests/prueba-y");
+  assert.match(doc.querySelector(".message-view h1").textContent, /no tiene el formato correcto/);
+  assert.match(doc.querySelector(".message-view .error-list").textContent, /documents\/tests\/roto\.test\.md:10/);
+});
+
+test("modo steps: procedimientos y guías; la ruta de pruebas queda deshabilitada", async () => {
   const { doc, app } = await bootApp({ mode: "steps" });
-  assert.ok(doc.querySelector(".doc-section--steps"));
-  assert.equal(doc.querySelector(".doc-section--test"), null);
-  assert.equal(doc.querySelector(".segmented"), null);
-  await app.navigate("#/tests/site-validation");
+  assert.deepEqual([...doc.querySelectorAll(".doc-section")].map((s) => s.dataset.category), ["procedure", "lab-guide"]);
+  assert.ok(doc.querySelector(".segmented"), "con dos categorías sigue habiendo filtro");
+  await app.navigate("#/tests/docpages-basics");
   assert.match(doc.querySelector(".message-view").textContent, /deshabilitado/);
 });
 
-test("modo tests: solo pruebas", async () => {
+test("modo tests: solo pruebas de práctica", async () => {
   const { doc } = await bootApp({ mode: "tests" });
-  assert.equal(doc.querySelector(".doc-section--steps"), null);
-  assert.deepEqual(visibleCards(doc), ["site-validation"]);
+  assert.deepEqual([...doc.querySelectorAll(".doc-section")].map((s) => s.dataset.category), ["practice-test"]);
+  assert.equal(doc.querySelector(".segmented"), null);
+  assert.deepEqual(visibleCards(doc), ["docpages-basics"]);
 });
 
 test("rutas: funciona en la raíz de un sitio de usuario y en local sin repositorio", async () => {
@@ -283,12 +516,15 @@ test("rutas: funciona en la raíz de un sitio de usuario y en local sin reposito
   assert.ok(![...local.doc.querySelectorAll(".steps-content a")].some((a) => a.getAttribute("href").startsWith("/settings")));
 });
 
-test("documento inexistente y ancla a un paso", async () => {
+test("documento inexistente y anclas a un paso o a una pregunta", async () => {
   const { doc, app } = await bootApp();
   await app.navigate("#/steps/no-existe");
   assert.match(doc.querySelector(".message-view h1").textContent, /Documento no encontrado/);
   await app.navigate("#/steps/publish-github-pages/enable-pages");
   assert.equal(doc.querySelector("#step-enable-pages .step__toggle").getAttribute("aria-expanded"), "true");
+  assert.equal(doc.activeElement, doc.querySelector("#step-enable-pages .step__toggle"));
+  await app.navigate("#/tests/docpages-basics/percent");
+  assert.equal(doc.activeElement, doc.getElementById("question-title-percent"));
 });
 
 test("sin almacenamiento disponible la app sigue funcionando", async () => {
@@ -303,8 +539,13 @@ test("sin almacenamiento disponible la app sigue funcionando", async () => {
       throw new Error("denied");
     },
   };
-  const { doc, app } = await bootApp({ storage: blocked, session: blocked });
+  const { doc, win, app } = await bootApp({ storage: blocked, session: blocked });
   await app.navigate("#/steps/publish-github-pages");
   doc.querySelector('.task-check[data-key="prepare-branch#0"]').click();
   assert.equal(doc.querySelector(".doc-progress__value").textContent.replace(/\s/g, ""), "10%");
+  await app.navigate("#/tests/docpages-basics");
+  const { question, choose, check } = quizHelpers(doc, win);
+  choose("suffix", ".steps.md");
+  check("suffix");
+  assert.equal(question("suffix").dataset.result, "correct");
 });

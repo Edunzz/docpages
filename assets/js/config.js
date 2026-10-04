@@ -12,10 +12,11 @@
  */
 
 /**
- * Qué tipos de documento se publican.
- *   "all"   → procedimientos (/documents/steps) y pruebas (/documents/tests)
- *   "steps" → solo procedimientos
- *   "tests" → solo pruebas
+ * Qué se publica.
+ *   "all"   → todo: procedimientos y guías de laboratorio (/documents/steps)
+ *             y pruebas de práctica (/documents/tests)
+ *   "steps" → solo procedimientos y guías de laboratorio
+ *   "tests" → solo pruebas de práctica
  */
 export const DOCUMENTATION_MODE = "all";
 
@@ -23,8 +24,8 @@ export const CONFIG = Object.freeze({
   /** Nombre visible del sitio, por idioma. */
   siteTitle: { es: "Documentación", en: "Documentation" },
   siteTagline: {
-    es: "Procedimientos guiados y resultados de pruebas, publicados desde Markdown.",
-    en: "Guided procedures and test results, published from Markdown.",
+    es: "Procedimientos, guías de laboratorio y pruebas de práctica, publicados desde Markdown.",
+    en: "Procedures, lab guides and practice tests, published from Markdown.",
   },
 
   /**

@@ -1,0 +1,53 @@
+# Desarrollado por Jose Eduardo Romero Jimenez
+# https://github.com/Edunzz
+#
+# Revisa cada pull request antes de unirlo a main. Si un documento no sigue
+# el formato, el check falla y GitHub marca el error sobre la línea del
+# archivo (anotaciones de scripts/validate-documents.mjs). No publica nada:
+# solo lee el repositorio.
+
+name: Validar documentación
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validar documentos y probar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependencias (reproducible, desde package-lock.json)
+        run: npm ci
+
+      - name: Empaquetar librerías del navegador e iconos
+        run: npm run vendor
+
+      - name: Validar documentos
+        run: npm run validate
+
+      - name: Generar el índice y comprobar enlaces internos
+        run: |
+          npm run manifest
+          npm run check:links
+
+      - name: Pruebas automatizadas
+        run: npm test

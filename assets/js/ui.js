@@ -10,7 +10,7 @@
  * para poder probarse con jsdom.
  */
 
-import { ICON_NAMES, STATUS_ICONS, CALLOUT_ICONS } from "./icons.js";
+import { ICON_NAMES, CALLOUT_ICONS, CATEGORY_ICONS } from "./icons.js";
 import { isSafeUrl, resolveRelativePath, expandTokens, urlScheme } from "./markdown.js";
 
 export const ICON_SPRITE = "assets/icons/sprite.svg";
@@ -56,10 +56,6 @@ export function icon(doc, name, { className = "", label = "" } = {}) {
 export function setIcon(svg, name) {
   const use = svg && svg.querySelector("use");
   if (use) use.setAttribute("href", `${ICON_SPRITE}#${ICONS.has(name) ? name : "link"}`);
-}
-
-export function statusBadge(doc, t, status, { className = "" } = {}) {
-  return h(doc, "span", { class: ["badge", `status--${status}`, className], dataset: { status } }, icon(doc, STATUS_ICONS[status] || "circle"), h(doc, "span", { text: t(`status.${status}`) }));
 }
 
 /** Barra de progreso accesible; devuelve `{ element, update(percent, valueText) }`. */
@@ -207,8 +203,8 @@ export function enhanceContent(container, ctx) {
       return;
     }
     if (!isExternal(src)) img.setAttribute("src", resolveDocumentHref(src, { ...ctx, documentRoute: null }));
-    if (img.closest("a, button") || !ctx.openLightbox) return;
-    const button = h(doc, "button", { type: "button", class: "zoomable", "aria-label": t("tests.openImage", { label: img.getAttribute("alt") || "" }) });
+    if (img.closest("a, button, label") || !ctx.openLightbox) return;
+    const button = h(doc, "button", { type: "button", class: "zoomable", "aria-label": t("content.openImage", { label: img.getAttribute("alt") || "" }) });
     img.replaceWith(button);
     button.append(img);
     button.addEventListener("click", () => ctx.openLightbox(img.getAttribute("src"), img.getAttribute("alt") || ""));
@@ -293,15 +289,34 @@ export function renderDocLinks(ctx, links) {
   return h(doc, "nav", { class: "doc-links", "aria-label": t("doc.links") }, h(doc, "ul", { class: "chip-list" }, items));
 }
 
+/** Objetivos y requisitos previos (guías de laboratorio, sobre todo). */
+function renderBrief(ctx, meta) {
+  const { doc, t } = ctx;
+  const blocks = [
+    ["objectives", "target", t("doc.objectives")],
+    ["prerequisites", "clipboard-list", t("doc.prerequisites")],
+  ]
+    .filter(([key]) => Array.isArray(meta[key]) && meta[key].length)
+    .map(([key, iconName, title]) =>
+      h(
+        doc,
+        "section",
+        { class: ["brief", `brief--${key}`], "aria-labelledby": `brief-${key}` },
+        h(doc, "h2", { class: "brief__title", id: `brief-${key}` }, icon(doc, iconName), h(doc, "span", { text: title })),
+        h(doc, "ul", {}, meta[key].map((item) => h(doc, "li", { text: ctx.localize(item) }))),
+      ),
+    );
+  return blocks.length ? h(doc, "div", { class: "brief-grid" }, blocks) : null;
+}
+
 /**
- * Cabecera común de procedimientos y pruebas.
+ * Cabecera común de procedimientos, guías de laboratorio y pruebas de práctica.
  * @param {object} ctx contexto de vista
  * @param {{entry:object, meta:object, extraMeta?:Array<[string,string,string]>, aside?:Node, onReset?:Function}} opts
  */
 export function renderDocHeader(ctx, { entry, meta, extraMeta = [], aside = null, onReset = null }) {
   const { doc, t } = ctx;
-  const typeIcon = entry.type === "steps" ? "list-checks" : "flask-conical";
-  const sectionLabel = entry.type === "steps" ? t("section.steps") : t("section.tests");
+  const category = entry.category || (entry.type === "test" ? "practice-test" : "procedure");
 
   const breadcrumb = h(
     doc,
@@ -312,7 +327,7 @@ export function renderDocHeader(ctx, { entry, meta, extraMeta = [], aside = null
       "ol",
       {},
       h(doc, "li", {}, h(doc, "a", { href: "#/" }, icon(doc, "house"), h(doc, "span", { text: t("nav.home") }))),
-      h(doc, "li", {}, h(doc, "a", { href: `#/?type=${entry.type}` }, sectionLabel)),
+      h(doc, "li", {}, h(doc, "a", { href: `#/?type=${category}` }, t(`section.${category}`))),
       h(doc, "li", {}, h(doc, "span", { "aria-current": "page", text: ctx.localize(meta.title) })),
     ),
   );
@@ -321,6 +336,8 @@ export function renderDocHeader(ctx, { entry, meta, extraMeta = [], aside = null
     ["user", t("doc.author"), meta.author || ""],
     ["calendar", t("doc.updated"), ctx.formatDate(meta.updated)],
     ["git-commit-horizontal", t("doc.version"), String(meta.version)],
+    ["timer", t("doc.duration"), ctx.localize(meta.duration)],
+    ["gauge", t("doc.level"), meta.level ? t(`level.${meta.level}`) : ""],
     ...extraMeta,
   ].filter(([, , value]) => value);
 
@@ -331,7 +348,7 @@ export function renderDocHeader(ctx, { entry, meta, extraMeta = [], aside = null
   return h(
     doc,
     "header",
-    { class: ["doc-header", `doc-header--${entry.type}`] },
+    { class: ["doc-header", `doc-header--${category}`] },
     breadcrumb,
     h(
       doc,
@@ -341,7 +358,7 @@ export function renderDocHeader(ctx, { entry, meta, extraMeta = [], aside = null
         doc,
         "div",
         { class: "doc-header__text" },
-        h(doc, "p", { class: "eyebrow" }, icon(doc, typeIcon), h(doc, "span", { text: t(`doc.type.${entry.type}`) })),
+        h(doc, "p", { class: "eyebrow" }, icon(doc, CATEGORY_ICONS[category]), h(doc, "span", { text: t(`category.${category}`) })),
         h(doc, "h1", { id: "doc-title", tabindex: "-1", text: ctx.localize(meta.title) }),
         meta.description ? h(doc, "p", { class: "lead", text: ctx.localize(meta.description) }) : null,
         h(
@@ -355,5 +372,6 @@ export function renderDocHeader(ctx, { entry, meta, extraMeta = [], aside = null
       ),
       aside || onReset ? h(doc, "div", { class: "doc-header__aside" }, aside, onReset ? resetButton(ctx, onReset) : null) : null,
     ),
+    renderBrief(ctx, meta),
   );
 }

@@ -1,379 +1,276 @@
-# DocPages · Documentación bilingüe en GitHub Pages
+# DocPages
 
-Sitio estático que publica en **GitHub Pages** los Markdown de `/documents` como documentación interactiva en **español e inglés**:
+**Turn Markdown files into a bilingual (English/Spanish) website on GitHub Pages: step-by-step procedures, hands-on lab guides and practice tests.**
 
-- **Procedimientos** (`{titulo}.steps.md`): pasos, subpasos y casillas, con navegación, porcentaje de avance y progreso guardado en el navegador.
-- **Pruebas** (`{titulo}.test.md`): ejecución de una prueba con veredicto, resumen por estado, casos, evidencia y una re-ejecución local opcional.
+[Leer en español](README.es.md)
 
-Todo corre en el navegador (HTML, CSS y JavaScript). No hay backend, base de datos ni CDN, y una copia del repositorio muestra **su propio** propietario y nombre sin editar nada.
-
-| Portada | Procedimiento | Prueba |
+| Home | Lab guide | Practice test |
 |---|---|---|
-| ![Portada con buscador y tarjetas de procedimientos y pruebas](docs/images/home.png) | ![Procedimiento con stepper, progreso, subpasos y casillas](docs/images/steps.png) | ![Prueba con veredicto, resumen por estado y casos](docs/images/test.png) |
+| ![Home page with search and the three sections](docs/images/home.png) | ![Lab guide with objectives, steps and progress](docs/images/lab-guide.png) | ![Practice test with graded questions and score](docs/images/practice-test.png) |
 
-Modo oscuro: [portada](docs/images/home-dark.png) · [procedimiento](docs/images/steps-dark.png). Las capturas se tomaron con Chrome sobre el sitio construido (`npm run preview`), en vista local, por eso aparece «Repositorio no detectado».
+## What can I publish?
 
----
+| Type | What the reader gets | File you write |
+|---|---|---|
+| **Procedure** | Steps with checkboxes and a progress bar. | `documents/steps/my-procedure.steps.md` |
+| **Lab guide** | A procedure plus objectives, prerequisites, duration and level. | `documents/steps/my-lab.steps.md` with `kind: "lab-guide"` |
+| **Practice test** | Training questions they answer, check and get a score for. | `documents/tests/my-test.test.md` |
 
-## Contenido
+Everything runs in the browser: no server, no database. Progress and answers are saved only in each reader's browser.
 
-1. [Demo publicada](#1-demo-publicada)
-2. [Requisitos](#2-requisitos)
-3. [Inicio rápido](#3-inicio-rápido)
-4. [Habilitar GitHub Pages](#4-habilitar-github-pages)
-5. [Crear un procedimiento `.steps.md`](#5-crear-un-procedimiento-stepsmd)
-6. [Crear una prueba `.test.md`](#6-crear-una-prueba-testmd)
-7. [Español e inglés](#7-español-e-inglés)
-8. [Enlaces iniciales y reinicio](#8-enlaces-iniciales-y-reinicio)
-9. [Habilitar Steps, Tests o ambos](#9-habilitar-steps-tests-o-ambos)
-10. [Validar en local](#10-validar-en-local)
-11. [Personalizar colores, logotipo y librerías](#11-personalizar-colores-logotipo-y-librerías)
-12. [Usarlo como plantilla sin heredar nombres](#12-usarlo-como-plantilla-sin-heredar-nombres)
-13. [Detección automática del repositorio](#13-detección-automática-del-repositorio)
-14. [Seguridad, restricciones y límites](#14-seguridad-restricciones-y-límites)
-15. [Estructura y decisiones técnicas](#15-estructura-y-decisiones-técnicas)
-16. [Créditos](#16-créditos)
+## Get started in 4 steps
 
----
+1. Click **Use this template** (or fork the repository) to get your own copy.
+2. In your copy, open **Settings → Pages** and set **Source** to **GitHub Actions**.
+3. Add or edit files in `documents/` (see below) and push to `main`.
+4. Wait for the green check in the **Actions** tab. Your site is at `https://<your-user>.github.io/<your-repo>/`.
 
-## 1. Demo publicada
+You don't need to change any names or links: the site detects your user and repository by itself. The files already in `documents/` are examples; keep them, edit them or delete them.
 
-Tras el primer despliegue, el sitio queda en:
+## Write a procedure
 
-```text
-https://{owner}.github.io/{repositorio}/
-```
-
-La URL exacta aparece en **Actions → «Publicar documentación en GitHub Pages» → job `deploy`** y en **Settings → Pages**. Rutas útiles:
-
-- `#/` portada con búsqueda.
-- `#/steps/publish-github-pages` procedimiento de ejemplo.
-- `#/tests/site-validation` prueba de ejemplo.
-- `docs/diagrams/steps-progress-flow.html` diagrama del flujo de progreso.
-
-## 2. Requisitos
-
-- Una cuenta de GitHub y un repositorio **público** (la actualización en vivo usa la API pública sin token).
-- Para desarrollar y validar en local: **Node.js 22 o superior** y npm. El CI usa la versión de [`.nvmrc`](.nvmrc).
-- Un navegador moderno (Chrome, Edge, Firefox o Safari recientes).
-
-## 3. Inicio rápido
-
-```bash
-git clone https://github.com/{owner}/{repositorio}.git
-cd {repositorio}
-npm ci              # dependencias exactas del package-lock.json
-npm run build       # empaqueta librerías, valida, genera el manifiesto y construye _site/
-npm test            # pruebas automatizadas (unidad, integración y accesibilidad)
-npm run preview     # sirve _site/ en http://localhost:8080/docpages/
-```
-
-> [!TIP]
-> En Git Bash para Windows, antepón `MSYS_NO_PATHCONV=1` al usar `node scripts/serve.mjs --base /mi-repo/`: MSYS convierte las rutas que empiezan con `/` en rutas de Windows.
-
-<details>
-<summary><strong>English quick start</strong></summary>
-
-DocPages publishes the Markdown files in `/documents` as a bilingual (Spanish/English) static site on GitHub Pages: procedures (`*.steps.md`) with steps, substeps, checkboxes and saved progress, and test runs (`*.test.md`) with verdict, status summary, cases and evidence.
-
-1. Use this repository as a template (or fork it).
-2. In **Settings → Pages**, set **Source** to **GitHub Actions**.
-3. Push to `main`. The workflow validates, tests, builds and deploys.
-4. Locally: `npm ci && npm run build && npm test && npm run preview`.
-
-Write documents following the [skill](.github/skills/documentation-pages/SKILL.md). The interface switches between Spanish and English; document text can provide both languages with `title: { es, en }`, `title.es`/`title.en` attributes and `:::lang es` / `:::lang en` blocks.
-
-</details>
-
-## 4. Habilitar GitHub Pages
-
-### Con GitHub Actions (recomendado)
-
-1. **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-2. Haz *push* a `main` o ejecuta el workflow a mano (**Actions → Publicar documentación en GitHub Pages → Run workflow**).
-
-El workflow [`.github/workflows/pages.yml`](.github/workflows/pages.yml):
-
-1. instala con `npm ci` (reproducible);
-2. empaqueta las librerías del navegador (`npm run vendor`);
-3. valida los documentos (`npm run validate`);
-4. genera `documents.manifest.json` con `GITHUB_REPOSITORY`, `GITHUB_SHA`, `GITHUB_REF_NAME` y la URL de Pages;
-5. comprueba enlaces internos y ejecuta las pruebas;
-6. construye `_site/` (solo archivos publicables) y lo despliega con las acciones oficiales.
-
-Usa permisos mínimos (`contents: read`, `pages: write`, `id-token: write`), concurrencia `pages` sin despliegues superpuestos y acciones fijadas por SHA.
-
-### Desde una rama (sin Actions)
-
-1. Ejecuta `npm run vendor && npm run manifest` y versiona el resultado (`assets/vendor/`, `assets/icons/sprite.svg`, `documents.manifest.json`). El repositorio ya los incluye.
-2. **Settings → Pages → Source: Deploy from a branch → `main` / `(root)`**.
-3. Conserva el archivo vacío **`.nojekyll`** en la raíz: sin él, Jekyll transformaría los `.md` con front matter y el sitio no podría leerlos.
-4. Cada vez que cambies documentos, vuelve a ejecutar `npm run validate && npm run manifest` antes del commit.
-
-En este modo el manifiesto no trae datos del repositorio (`repository: null`) y el navegador los deduce de la URL de Pages.
-
-## 5. Crear un procedimiento `.steps.md`
-
-Crea `documents/steps/{titulo}.steps.md` (nombre en kebab-case). Ejemplo completo: [`documents/steps/example.steps.md`](documents/steps/example.steps.md).
-
-````markdown
----
-title:
-  es: "Instalar el agente"
-  en: "Install the agent"
-description:
-  es: "Pasos para instalar y verificar el agente."
-  en: "Steps to install and verify the agent."
-slug: "instalar-agente"
-type: "steps"
-version: "1.0.0"
-author: "Tu nombre"
-updated: "2026-10-03"
-tags: [instalacion, agente]
-links:
-  - label: { es: "Repositorio", en: "Repository" }
-    url: "{{repo_url}}"
-    icon: "github"
-    highlight: true
-reset: true
----
-
-# {{ title }}
-
-:::step id="preparar" title.es="Preparar el servidor" title.en="Prepare the server"
-:::lang es
-Comprueba los requisitos antes de instalar.
-- [ ] El servidor tiene acceso a Internet.
-:::
-:::lang en
-Check the requirements before installing.
-- [ ] The server has Internet access.
-:::
-
-:::substep id="preparar-puertos" title.es="Abrir puertos" title.en="Open ports"
-- [ ] Puerto 443 abierto.
-:::
-:::
-
-:::step id="instalar" title.es="Instalar" title.en="Install"
-```bash
-sudo ./installer.sh
-```
-
-> [!WARNING]
-> Ejecuta el instalador como administrador.
-:::
-````
-
-Reglas:
-
-- `:::step` en el nivel superior; `:::substep` solo dentro de un paso. Cada directiva cierra con `:::` en su propia línea (dentro de bloques de código no cuentan).
-- `id` único por documento y un título por idioma (`title.es`, `title.en`).
-- **Unidades de progreso (hojas):** cada casilla `- [ ]`, cada subpaso sin casillas y cada paso sin subpasos ni casillas. El porcentaje es hojas hechas / total, redondeado hacia abajo, así que el 100 % solo aparece cuando está todo.
-- «Marcar como completado» marca o desmarca todas las hojas del paso y avanza al siguiente. Hay botones Anterior/Siguiente, un *stepper* lateral y atajos ← → del teclado.
-- Avisos `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`; código con botón «Copiar» y resaltado.
-- El progreso se guarda en `localStorage` con la clave `docpages:{owner/repo}:{slug}:{version}:steps`. Si subes `version`, empieza limpio sin borrar el de la versión anterior.
-
-Así fluye el progreso, desde la carga hasta el guardado y el reinicio: [diagrama interactivo](docs/diagrams/steps-progress-flow.html) (generado con archify; fuente: [`steps-progress-flow.archify.json`](docs/diagrams/steps-progress-flow.archify.json)).
-
-## 6. Crear una prueba `.test.md`
-
-Crea `documents/tests/{titulo}.test.md`. Ejemplo completo: [`documents/tests/example.test.md`](documents/tests/example.test.md).
+Create `documents/steps/install-the-app.steps.md`:
 
 ```markdown
 ---
-title: { es: "Prueba de humo", en: "Smoke test" }
-description: { es: "Comprueba el despliegue.", en: "Checks the deployment." }
-slug: "prueba-humo"
-type: "test"
+title: "Install the app"
+description: "From download to first launch."
+slug: "install-the-app"
+type: "steps"
+kind: "procedure"
 version: "1.0.0"
-author: "Tu nombre"
-updated: "2026-10-03"
-tags: [test]
-status: "passed"
-executedAt: "2026-10-03T20:00:00-05:00"
-environment: { es: "Producción", en: "Production" }
-links:
-  - label: { es: "Sitio publicado", en: "Published site" }
-    url: "{{pages_url}}"
-    icon: "globe"
-reset: true
-summary: { passed: 2, failed: 0, blocked: 0, total: 2 }
+updated: "2026-10-04"
 ---
 
-# {{ title }}
-
-## Objetivo | Objective
-
-Validar que el sitio se publica y es navegable.
-
-:::testcase id="portada" title.es="Carga la portada" title.en="Home page loads" status="passed"
-**Esperado:** responde sin errores.
-
-**Obtenido:** respondió sin errores.
-
-:::evidence type="image" label.es="Captura de la portada" label.en="Home page screenshot"
-evidence/portada.png
-:::
+:::step id="download" title="Download"
+- [ ] Download the installer.
+- [ ] Check the file size.
 :::
 
-:::testcase id="navegacion" title.es="Navega entre documentos" title.en="Navigates documents" status="passed"
-**Expected / Esperado:** procedimientos y pruebas accesibles.
-
-**Actual / Obtenido:** ambos se cargaron.
-
-:::evidence type="link" label.es="Abrir el sitio" label.en="Open the site"
-{{pages_url}}
-:::
+:::step id="install" title="Install"
+- [ ] Run the installer.
 :::
 ```
 
-- Estados: `not-run`, `running`, `passed`, `failed`, `blocked`, `partial`. Siempre se muestran con icono, texto y color.
-- `status` es opcional: si falta, se deriva (`failed` > `blocked` > `partial` > `running` > todo sin ejecutar → `not-run` > algo sin ejecutar → `partial` > `passed`). Si `status` o `summary` no coinciden con los casos, el validador avisa y la página muestra los valores calculados.
-- `:::evidence` admite `type="link"` (http(s) o relativo) y `type="image"` (ruta relativa dentro del sitio; png, jpg, jpeg, gif, webp, avif o svg).
-- En la página puedes **filtrar por estado** y registrar una **re-ejecución local** por caso. Es estado local (`docpages:{owner/repo}:{slug}:{version}:test`) y «Reiniciar» lo borra. El Markdown nunca se modifica.
+- Everything between `:::step` and `:::` is one step. You can put `:::substep` blocks inside a step.
+- Each `- [ ]` line is a checkbox that counts toward the progress bar.
+- `id` must be unique inside the file. `slug` is the page address and must be unique across all files.
 
-## 7. Español e inglés
+## Write a lab guide
 
-- **Interfaz:** el selector ES/EN de la barra superior cambia menú, botones, estados, mensajes, ayudas y etiquetas, y actualiza `<html lang>`. La preferencia se guarda en `localStorage` (`docpages:lang`). Sin preferencia, se usa el idioma del navegador y, si no es español ni inglés, español.
-- **Contenido:** usa `{ es, en }` en el front matter (`title`, `description`, `environment`, `links[].label`), atributos `title.es` / `title.en` / `label.es` / `label.en` en las directivas y bloques en el cuerpo:
+It is a procedure with `kind: "lab-guide"` and a few extra fields that appear at the top of the page:
 
-  ```markdown
-  :::lang es
-  Texto en español.
-  :::
-  :::lang en
-  English text.
-  :::
-  ```
+```markdown
+---
+title: "Lab: your first container"
+description: "Run a container and stop it."
+slug: "lab-first-container"
+type: "steps"
+kind: "lab-guide"
+version: "1.0.0"
+updated: "2026-10-04"
+duration: "30 minutes"
+level: "beginner"
+objectives:
+  - "Run a container."
+  - "Stop it."
+prerequisites:
+  - "Docker installed."
+---
 
-  Los bloques `:::lang` consecutivos forman un grupo y se muestra la variante del idioma activo (con respaldo al español). El texto fuera de bloques se muestra en ambos idiomas. Las variantes deben tener las mismas casillas `- [ ]`.
-- **Textos de la interfaz:** están en [`assets/js/i18n.js`](assets/js/i18n.js). Una prueba exige que ambos idiomas tengan las mismas claves.
-
-## 8. Enlaces iniciales y reinicio
-
-- `links` en el front matter se muestran en la cabecera, antes del contenido. `url` admite `http(s)`, `mailto`, rutas relativas y **tokens**: `{{repo_url}}`, `{{pages_url}}`, `{{owner}}`, `{{repo_name}}`, `{{repo}}`, `{{clone_url}}`, `{{branch}}`. `highlight: true` lo resalta. `icon` usa un nombre del catálogo [`assets/js/icons.js`](assets/js/icons.js); si no existe, el validador avisa.
-- Los externos abren en otra pestaña con `rel="noopener noreferrer"`. Si un token no se puede resolver (vista local), el enlace se muestra atenuado en lugar de roto.
-- `reset: true` (por defecto) muestra **Reiniciar**. Requiere dos clics para evitar borrados accidentales, sin diálogos bloqueantes, y solo borra el estado local del documento. Con `reset: false` el botón no aparece.
-
-## 9. Habilitar Steps, Tests o ambos
-
-En [`assets/js/config.js`](assets/js/config.js):
-
-```js
-export const DOCUMENTATION_MODE = "all";
-// Valores: "all", "steps", "tests"
+:::step id="run" title="Run the container"
+- [ ] `docker run hello-world` prints a greeting.
+:::
 ```
 
-| Modo | Efecto |
-|---|---|
-| `all` | Publica procedimientos y pruebas. |
-| `steps` | Solo `/documents/steps`: la portada oculta Pruebas, `#/tests/...` se muestra como deshabilitado, la validación y el manifiesto ignoran los `.test.md` y `_site/` no incluye `documents/tests`. |
-| `tests` | Lo análogo para pruebas. |
+`level` can be `beginner`, `intermediate` or `advanced`. Full example: [`first-practice-test-lab.steps.md`](documents/steps/first-practice-test-lab.steps.md).
 
-Navegación, validación, manifiesto y build leen el mismo valor: basta con cambiarlo y ejecutar `npm run build && npm test`.
+## Write a practice test
 
-## 10. Validar en local
+Create `documents/tests/networking-basics.test.md`. Each question is a `:::question` block:
 
-| Comando | Qué hace |
-|---|---|
-| `npm run validate` | Valida nombres, carpetas, front matter (con [`schemas/`](schemas/)), directivas, ids, idiomas, evidencia, enlaces inseguros y slugs duplicados. Muestra línea y motivo. `--json` para agentes y CI; `--strict` falla también con avisos. |
-| `npm run manifest` | Genera `documents.manifest.json` (orden determinista, hash SHA-256 por documento). No escribe nada si hay errores. |
-| `npm run check:links` | Enlaces e imágenes relativos de documentos y evidencias, assets de `index.html`/`404.html`, `url()` del CSS, imports de los módulos e iconos del sprite. |
-| `npm test` | 81 pruebas con `node:test`: parser, validación, manifiesto, idioma, almacenamiento, progreso, resumen de pruebas, sanitización, rutas, modos, *fallback* de la API, enlaces, atribución y la app completa en jsdom con **axe-core** (sin infracciones en portada, procedimiento y prueba, en ambos idiomas). |
-| `npm run build` | Todo lo anterior salvo las pruebas, más `_site/`. |
-| `npm run preview` | Construye y sirve `_site/` bajo `/docpages/`, como un sitio de proyecto. |
+```markdown
+---
+title: "Networking basics"
+description: "Quick review questions."
+slug: "networking-basics"
+type: "test"
+version: "1.0.0"
+updated: "2026-10-04"
+passingScore: 70
+---
 
-## 11. Personalizar colores, logotipo y librerías
+:::question type="single"
+Which port does HTTPS use?
+- [ ] 80
+- [x] 443
+- [ ] 22
+:::explanation
+HTTPS uses port 443 by default.
+:::
+:::
 
-- **Nombre y lema:** `CONFIG.siteTitle` y `CONFIG.siteTagline` en `assets/js/config.js` (por idioma). Ajusta también `name` en `manifest.webmanifest` y `<title>` en `index.html`.
-- **Colores:** variables al inicio de [`assets/css/app.css`](assets/css/app.css) (`--primary`, `--accent`, superficies y los colores de estado `--passed-*`, `--failed-*`…), definidas para claro y para oscuro. Mantén contraste AA si las cambias.
-- **Logotipo:** reemplaza `assets/icons/logo.svg` (se usa en la barra, el favicon y el web manifest).
-- **Iconos:** añade el nombre de Lucide a `assets/js/icons.js` y ejecuta `npm run vendor`.
-- **Librerías:** fijadas en `package.json` y `package-lock.json`, y copiadas a `assets/vendor/` por `npm run vendor`. Licencias en [`assets/vendor/THIRD_PARTY_NOTICES.md`](assets/vendor/THIRD_PARTY_NOTICES.md).
+:::question type="true-false" answer="false"
+UDP guarantees that packets arrive.
+:::
+```
 
-  | Uso | Librería |
-  |---|---|
-  | Markdown | markdown-it 15 (`html: false`) |
-  | Front matter | js-yaml 5 |
-  | Sanitización | DOMPurify 3 |
-  | Resaltado | Prism 1.30 |
-  | Iconos | Lucide 1.x + Octicons (`github`) |
-  | Animaciones | CSS (sin librería), respetando `prefers-reduced-motion` |
+Mark the right option with `[x]`. `:::explanation` (optional) shows up after the reader checks the answer. `:::hint` (optional) is a hint the reader can open.
 
-## 12. Usarlo como plantilla sin heredar nombres
+### Question types
 
-1. **Use this template** (o *fork*). El código no contiene propietario, nombre de repositorio ni dominio fijos.
-2. Borra o reemplaza los ejemplos de `documents/` y regenera el manifiesto (`npm run manifest`).
-3. Habilita Pages (sección 4) y haz *push*.
+| `type` | Use it for | How to give the answer |
+|---|---|---|
+| `single` | Pick one option | `- [ ]` options; mark exactly one with `- [x]` |
+| `multiple` | Pick all that apply | Mark every correct option with `- [x]` |
+| `true-false` | True or false | `answer="true"` or `answer="false"` |
+| `text` | Short answer | `answer="DNS\|Domain Name System"` (alternatives separated by `\|`; case and accents don't matter) |
+| `number` | Numeric answer | `answer="255"`, optionally `tolerance="0.5"` |
+| `order` | Put items in order | A numbered list in the right order (the site shuffles it) |
+| `match` | Match pairs | A list of `item :: match` lines |
 
-El encabezado, el botón «Ver repositorio», los enlaces `{{repo_url}}` y el pie mostrarán tu propietario y tu repositorio automáticamente. Si publicas con un dominio propio sin Actions, define `CONFIG.repository = { owner, name }` en `config.js`.
+```markdown
+:::question type="match"
+Match each protocol with its port:
 
-## 13. Detección automática del repositorio
+- HTTP :: 80
+- HTTPS :: 443
+- SSH :: 22
+:::
+```
 
-Orden de resolución, implementado en [`assets/js/github.js`](assets/js/github.js):
+More options: `points="2"` on a question (default is 1). In the front matter, `feedback: "end"` grades everything when the reader finishes, and `shuffle: true` shuffles the options. Full example with all seven types: [`docpages-basics.test.md`](documents/tests/docpages-basics.test.md).
 
-1. **Override** en `config.js` (`CONFIG.repository`), si tiene `owner` y `name`.
-2. **URL de GitHub Pages:** `https://{owner}.github.io/{repo}/` da `owner/repo`. En un sitio de usuario u organización (`https://{owner}.github.io/`), el repositorio es `{owner}.github.io`. Si el manifiesto apunta al mismo repositorio, se aprovechan sus datos (mayúsculas reales, rama, URL de Pages).
-3. **Manifiesto del despliegue** (`GITHUB_REPOSITORY`), necesario con un dominio propio.
-4. **Nada:** vista local, sin enlaces al repositorio.
+> [!NOTE]
+> The answers live in your Markdown, which is public. Practice tests are for training, not for official exams.
 
-La URL tiene prioridad sobre el manifiesto porque, si un fork publica desde una rama, el manifiesto versionado podría ser el del original.
+## Two languages (optional)
 
-**«Actualizar desde el repositorio público»** consulta la API pública de GitHub (metadatos y árbol de la rama) y lee cada documento desde `raw.githubusercontent.com`. Los valida con las mismas reglas del CI y los usa durante la sesión. Si algo falla (sin red, repositorio privado o inexistente, límite de solicitudes, tiempo agotado o respuesta inválida), se informa el motivo y **se conserva el manifiesto del despliegue**.
+Text you write once shows in both languages. To translate, use `{ es: "…", en: "…" }` in the front matter, `title.es="…" title.en="…"` on steps, and `:::lang` blocks in the body:
 
-Todas las rutas son relativas y la navegación usa `#/…`, así que el sitio funciona igual en la raíz y bajo `/{repositorio}/`. `404.html` redirige `/{base}/steps/{slug}` a `#/steps/{slug}`.
+```markdown
+:::lang en
+Hello! This paragraph is shown in English.
+:::
+:::lang es
+¡Hola! Este párrafo se muestra en español.
+:::
+```
 
-## 14. Seguridad, restricciones y límites
+The reader switches language with the ES/EN buttons at the top of the site.
 
-- **Sin HTML crudo:** markdown-it con `html: false` lo muestra como texto. Todo el HTML generado pasa por **DOMPurify** antes de entrar al DOM (sin `style`, formularios, iframes, SVG, MathML ni eventos).
-- **URLs:** enlaces solo `http(s)`, `mailto`, `tel`, anclas y relativas; imágenes solo `https` o relativas. `javascript:`, `data:`, `vbscript:` y `file:` se bloquean, y el validador los marca como error.
-- **CSP** en `index.html`: `script-src 'self'`, `style-src 'self'`, `connect-src` limitado a `api.github.com` y `raw.githubusercontent.com`, sin `object`, `frame` ni `form-action`.
-- Sin `eval`, `new Function` ni `innerHTML` sin sanitizar. Sin tokens de GitHub en el frontend ni secretos en Actions.
-- Workflow con permisos mínimos y acciones fijadas por SHA; dependencias exactas con lockfile y **Dependabot** semanal (npm y Actions).
-- **Límites de la API pública:** 60 solicitudes por hora y por IP sin autenticar (una actualización usa 2 de API más una lectura *raw* por documento); máximo 100 documentos por actualización (`CONFIG.github.maxDocuments`); repositorios privados no soportados; `raw.githubusercontent.com` puede servir contenido con unos minutos de caché.
-- **Estado local:** vive en el navegador de cada lector; en modo privado o con el almacenamiento bloqueado, el sitio sigue funcionando y el estado dura lo que la pestaña.
-- **Accesibilidad:** HTML semántico, enlace para saltar al contenido, foco visible, navegación por teclado, `aria-live` para anuncios, estados con icono y texto, contraste AA y `prefers-reduced-motion`.
+## If a file is wrong, you'll know
 
-## 15. Estructura y decisiones técnicas
+The site never publishes a file that doesn't follow the format. Check your files with:
+
+```bash
+npm run validate
+```
+
+Each problem comes with the file, the line and the reason (the messages are in Spanish):
 
 ```text
-.github/
-  workflows/pages.yml               validar → manifiesto → enlaces → pruebas → build → deploy
-  skills/documentation-pages/       skill reutilizable para agentes
-  copilot-instructions.md · dependabot.yml
-assets/
-  css/app.css                       tokens claro/oscuro, componentes, responsive, impresión
-  js/config.js                      DOCUMENTATION_MODE y override del repositorio
-  js/app.js                         arranque, router por hash, portada, búsqueda, actualización en vivo
-  js/markdown.js                    front matter, directivas, render, sanitización, URLs seguras
-  js/documents.js                   tipos, modos, validación y entradas del manifiesto (CI y navegador)
-  js/schema.js                      validador JSON Schema (subconjunto) contrastado con Ajv
-  js/steps.js · js/tests.js         modelos (progreso, resumen) y vistas
-  js/github.js · js/i18n.js · js/storage.js · js/ui.js · js/icons.js
-  vendor/                           librerías empaquetadas (npm run vendor)
-  icons/                            logo.svg y sprite.svg
-docs/diagrams/                      flujo del progreso (archify) y su fuente JSON
-docs/images/                        capturas del README
-documents/steps · documents/tests   documentos de ejemplo
-schemas/                            JSON Schema del front matter
-scripts/                            vendor, validate-documents, build-manifest, check-links, build-site, serve
-tests/                              node:test + jsdom + axe-core + Ajv
-index.html · 404.html · manifest.webmanifest · documents.manifest.json
+✖ documents/tests/networking-basics.test.md
+    error   L11: Pregunta 1: una pregunta «single» necesita exactamente una opción correcta «- [x]» (tiene 0).
 ```
 
-Decisiones:
+On GitHub the same check runs on every push and pull request. If it fails, GitHub marks the line in the file and the published site stays as it was.
 
-- **Una sola implementación de las reglas:** los scripts de Node importan los mismos módulos del navegador, así que validar en el CI y actualizar en vivo dan el mismo resultado.
-- **Inyección de dependencias:** los módulos no tocan globales; la app completa corre en jsdom para las pruebas de integración y accesibilidad.
-- **Navegación por hash:** funciona en la raíz y bajo `/{repositorio}/` sin configurar el servidor.
-- **Progreso por hojas:** una regla simple, independiente del idioma y comprobable (ver el diagrama).
-- **Librerías empaquetadas sin CDN:** compatible con la CSP estricta, reproducible con el lockfile y publicable desde una rama.
+| The message says… | What to do |
+|---|---|
+| «El archivo no sigue el formato» | Rename the file so it ends in `.steps.md` or `.test.md`, or move it out of `documents/`. |
+| «Atributo desconocido» or «Atributo mal escrito» | Fix the typo in the `:::` line and use quotes: `title="…"`. |
+| «exactamente una opción correcta» | Mark exactly one `- [x]` (use `type="multiple"` for several). |
+| «fuera de un «:::question»» | Move the options inside a question block. |
+| «slug duplicado» | Two files use the same `slug`; change one. |
 
-## 16. Créditos
+## Try it on your computer (optional)
 
-Desarrollado por **Jose Eduardo Romero Jimenez** · [github.com/Edunzz](https://github.com/Edunzz).
+You need [Node.js](https://nodejs.org/) 22 or later.
 
-El sitio muestra este crédito en el pie de página y todos los archivos de código lo incluyen como comentario. Los JSON no admiten comentarios, así que la autoría va en el campo `generator` del manifiesto y en `$comment` de los esquemas. Librerías de terceros: [avisos y licencias](assets/vendor/THIRD_PARTY_NOTICES.md).
+```bash
+npm ci            # install (once)
+npm run validate  # check your documents
+npm run preview   # open http://localhost:8080/docpages/
+```
 
-Licencia: [MIT](LICENSE). Contribuciones: [CONTRIBUTING.md](CONTRIBUTING.md).
+## Settings
+
+- **Show only some types:** in `assets/js/config.js`, set `DOCUMENTATION_MODE` to `"all"` (everything), `"steps"` (procedures and lab guides) or `"tests"` (practice tests).
+- **Site name:** `siteTitle` and `siteTagline` in the same file.
+- **Colors and logo:** the variables at the top of `assets/css/app.css` and the file `assets/icons/logo.svg`.
+
+## Common problems
+
+| Problem | Solution |
+|---|---|
+| The workflow fails at «Configurar GitHub Pages» | Settings → Pages → Source: **GitHub Actions**, then re-run the workflow. |
+| My new document doesn't show up | Run `npm run validate`; check the file name and folder. |
+| My progress or answers disappeared | You changed `version`, `slug` or an `id`. Each version keeps its own progress on purpose. |
+| «Rate limit» when refreshing from GitHub | GitHub allows 60 requests per hour without login. Wait and try again. |
+| Opening `index.html` directly shows an error | Use `npm run preview`: the documents can't be loaded from `file://`. |
+
+## Using an AI assistant
+
+The skill [`.github/skills/documentation-pages/SKILL.md`](.github/skills/documentation-pages/SKILL.md) teaches AI agents (GitHub Copilot, Claude…) every rule. For example, paste your questions and answers and ask: *"Turn these into a practice test"*. The agent writes a valid `.test.md` and runs `npm run validate`.
+
+## For developers
+
+<details>
+<summary>Commands, how publishing works, structure and security</summary>
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `npm run vendor` | Copies the browser libraries to `assets/vendor/` and builds the icon sprite. |
+| `npm run validate` | Validates every Markdown file in `documents/`. `--json` for agents, `--strict` to fail on warnings too. |
+| `npm run manifest` | Writes `documents.manifest.json` (the site index). Writes nothing if there are errors. |
+| `npm run check:links` | Checks internal links, images, imports and icons. |
+| `npm test` | Unit, integration (jsdom) and accessibility (axe-core) tests. |
+| `npm run build` | Everything above except the tests, plus the static site in `_site/`. |
+| `npm run preview` | Builds and serves `_site/` under `/docpages/`, like a GitHub Pages project site. |
+
+On Git Bash for Windows, prefix `MSYS_NO_PATHCONV=1` when running `node scripts/serve.mjs --base /my-repo/`.
+
+### Publishing
+
+- [`.github/workflows/pages.yml`](.github/workflows/pages.yml) runs on every push to `main`: install, validate, build the manifest with your repository data, check links, test, build `_site/` and deploy. Minimal permissions (`contents: read`, `pages: write`, `id-token: write`), actions pinned by SHA, no overlapping deployments.
+- [`.github/workflows/validate.yml`](.github/workflows/validate.yml) runs on pull requests with read-only permissions, so errors are flagged before merging.
+- Without Actions: run `npm run vendor && npm run manifest`, commit the result, set **Settings → Pages → Deploy from a branch → `main` / root**, and keep the `.nojekyll` file.
+
+### How it works
+
+- Hash routes (`#/steps/{slug}`, `#/tests/{slug}`), so the site works at the domain root and under `/{repository}/`.
+- The repository is detected from the GitHub Pages URL, then from the deployment manifest; `CONFIG.repository` in `config.js` overrides both (useful with a custom domain).
+- **Refresh from the public repository** reads the live documents through the public GitHub API, validates them with the same rules as CI and shows invalid files with their errors. If GitHub is unreachable, the deployed content is kept.
+- The Node scripts import the same modules as the browser, so local, CI and live validation always agree.
+
+### Structure
+
+```text
+assets/js/        app, router, Markdown parser, validation, steps.js (procedures and labs), quiz.js (practice tests)
+assets/css/       styles (light/dark themes)
+assets/vendor/    markdown-it, js-yaml, DOMPurify, Prism (no CDN)
+documents/        your documents (steps/ and tests/)
+schemas/          JSON Schema of the front matter
+scripts/          validate, manifest, check-links, build-site, serve, vendor
+tests/            node:test + jsdom + axe-core
+docs/             progress flow diagram and screenshots
+```
+
+### Security
+
+Raw HTML is never executed: markdown-it runs with `html: false` and all generated HTML goes through DOMPurify. Only `http(s)`, `mailto`, `tel`, anchors and relative links are allowed (`javascript:` and `data:` are validation errors). A strict Content Security Policy blocks inline scripts and styles. There are no tokens in the frontend; the public API is used without authentication (60 requests per hour per IP).
+
+### Accessibility
+
+Semantic HTML, keyboard navigation, visible focus, screen reader announcements, statuses shown with icon and text (not only color) and `prefers-reduced-motion` support. The tests run axe-core on every view in both languages.
+
+</details>
+
+## Credits
+
+Developed by **Jose Eduardo Romero Jimenez** · [github.com/Edunzz](https://github.com/Edunzz).
+
+License: [MIT](LICENSE) · Contributing: [CONTRIBUTING.md](CONTRIBUTING.md) (in Spanish) · Third-party libraries: [notices](assets/vendor/THIRD_PARTY_NOTICES.md).

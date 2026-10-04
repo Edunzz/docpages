@@ -9,10 +9,19 @@
  *   ---
  *   # {{ title }}              ← lo consume la cabecera de la página
  *
- *   :::step id="x" title.es="…" title.en="…"
+ *   :::step id="x" title.es="…" title.en="…"     ← procedimientos y guías (.steps.md)
  *   Markdown libre…
  *   :::substep id="y" title.es="…"
  *   - [ ] tarea
+ *   :::
+ *   :::
+ *
+ *   :::question type="single"                   ← pruebas de práctica (.test.md)
+ *   ¿Enunciado?
+ *   - [ ] opción
+ *   - [x] opción correcta
+ *   :::explanation
+ *   Por qué es la correcta.
  *   :::
  *   :::
  *
@@ -91,13 +100,31 @@ export function stripTitlePlaceholder(body) {
 
 // ─────────────────────────────── Directivas ────────────────────────────────
 
+/**
+ * Directivas permitidas: en qué tipo de documento, dentro de qué directiva
+ * (`null` = nivel superior) y con qué atributos. Los atributos de `localized`
+ * admiten variantes por idioma (`title.es`, `answer.en`…).
+ */
 export const DIRECTIVE_RULES = Object.freeze({
-  step: { types: ["steps"], parents: [null] },
-  substep: { types: ["steps"], parents: ["step"] },
-  testcase: { types: ["test"], parents: [null] },
-  evidence: { types: ["test"], parents: ["testcase"] },
-  lang: { types: ["steps", "test"], parents: [null, "step", "substep", "testcase"] },
+  step: { types: ["steps"], parents: [null], attributes: ["id", "title"], localized: ["title"] },
+  substep: { types: ["steps"], parents: ["step"], attributes: ["id", "title"], localized: ["title"] },
+  question: { types: ["test"], parents: [null], attributes: ["id", "type", "points", "answer", "tolerance"], localized: ["answer"] },
+  explanation: { types: ["test"], parents: ["question"], attributes: [], localized: [] },
+  hint: { types: ["test"], parents: ["question"], attributes: [], localized: [] },
+  lang: { types: ["steps", "test"], parents: [null, "step", "substep", "question", "explanation", "hint"], attributes: [], localized: [] },
 });
+
+/** Identificadores de pasos, subpasos y preguntas (parte de la URL y del progreso). */
+export const ID_RE = /^[A-Za-z0-9][\w-]*$/;
+
+/** ¿Es `key` un atributo permitido en la directiva `name`? */
+export function isKnownAttribute(name, key) {
+  const rule = DIRECTIVE_RULES[name];
+  if (!rule) return false;
+  const match = /^([\w-]+)\.([a-z]{2})$/.exec(key);
+  if (match) return rule.localized.includes(match[1]);
+  return rule.attributes.includes(key);
+}
 
 const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const OPEN_RE = /^ {0,3}:::[ \t]*([A-Za-z][\w-]*)(.*)$/;
@@ -375,6 +402,18 @@ function tableAlignRule(state) {
   }
 }
 
+/** Texto de un elemento de lista a partir de sus líneas: sin viñeta, sin casilla y sin sangría. */
+function listItemText(lines, [start, end]) {
+  const raw = lines.slice(start, end);
+  const marker = /^(\s*(?:[-*+]|\d{1,9}[.)]))(?:[ \t]+|$)/.exec(raw[0] || "");
+  const width = marker ? marker[0].length : 0;
+  const first = (raw[0] || "").slice(width);
+  const task = TASK_RE.exec(first);
+  const head = task ? first.slice(task[0].length) : first;
+  const rest = raw.slice(1).map((line) => line.replace(new RegExp(`^ {0,${Math.max(width, 1)}}`), ""));
+  return { text: [head, ...rest].join("\n").trim(), task: task ? task[1] !== " " : null };
+}
+
 export const SANITIZE_OPTIONS = Object.freeze({
   USE_PROFILES: { html: true },
   FORBID_TAGS: [
@@ -463,9 +502,40 @@ export function createMarkdownRenderer({ markdownit, DOMPurify = null, highlight
       requirePurify();
       return DOMPurify.sanitize(md.render(String(text == null ? "" : text)), { ...SANITIZE_OPTIONS, RETURN_DOM_FRAGMENT: true });
     },
+    /** Markdown en línea (sin párrafo), sanitizado, como DocumentFragment. */
+    renderInlineFragment(text) {
+      requirePurify();
+      return DOMPurify.sanitize(md.renderInline(String(text == null ? "" : text)), { ...SANITIZE_OPTIONS, RETURN_DOM_FRAGMENT: true });
+    },
     sanitize(html) {
       requirePurify();
       return DOMPurify.sanitize(String(html), SANITIZE_OPTIONS);
+    },
+    /**
+     * Listas de nivel superior de un texto, con el rango de líneas que ocupan
+     * y el texto de cada elemento (sin la viñeta ni la casilla).
+     * `task` es true (`[x]`), false (`[ ]`) o null (elemento normal).
+     */
+    listsOf(text) {
+      const source = normalizeNewlines(text);
+      const lines = source.split("\n");
+      const tokens = md.parse(source, {});
+      const lists = [];
+      for (let i = 0; i < tokens.length; i++) {
+        const open = tokens[i];
+        if (open.level !== 0 || (open.type !== "bullet_list_open" && open.type !== "ordered_list_open") || !open.map) continue;
+        const closeType = open.type.replace("_open", "_close");
+        const items = [];
+        let j = i + 1;
+        for (; j < tokens.length; j++) {
+          const token = tokens[j];
+          if (token.type === closeType && token.level === 0) break;
+          if (token.type === "list_item_open" && token.level === 1 && token.map) items.push(listItemText(lines, token.map));
+        }
+        lists.push({ ordered: open.type === "ordered_list_open", start: open.map[0], end: open.map[1], items });
+        i = j;
+      }
+      return { lines, lists };
     },
     /** Cuántas casillas `- [ ]` tiene un texto (misma regla que el render). */
     countTasks(text) {

@@ -15,6 +15,7 @@ import {
   stripTitlePlaceholder,
   expandTokens,
   plainText,
+  isKnownAttribute,
 } from "../assets/js/markdown.js";
 
 test("front matter: separa YAML y cuerpo e informa la línea de inicio", () => {
@@ -57,7 +58,9 @@ test("directivas: errores de cierre, nombre desconocido, tipo y anidamiento", ()
   assert.match(messages(":::step id=\"a\"\ntexto", "steps"), /no se cerró/);
   assert.match(messages(":::\n", "steps"), /sin ninguna directiva abierta/);
   assert.match(messages(":::warning\n:::", "steps"), /desconocida/);
-  assert.match(messages(":::testcase id=\"a\"\n:::", "steps"), /no se admite/);
+  assert.match(messages(":::question type=\"text\"\n:::", "steps"), /no se admite/);
+  assert.match(messages(":::testcase id=\"a\"\n:::", "test"), /desconocida/);
+  assert.match(messages(":::explanation\n:::", "test"), /debe ir dentro de «:::question»/);
   assert.match(messages(":::substep id=\"a\"\n:::", "steps"), /debe ir dentro de «:::step»/);
   assert.match(messages(":::step id=\"a\"\n:::step id=\"b\"\n:::\n:::", "steps"), /no puede ir dentro de «:::step»/);
   assert.match(messages(":::lang es\n:::step id=\"a\"\n:::\n:::", "steps"), /no puede ir dentro de «:::lang»/);
@@ -95,4 +98,23 @@ test("texto plano para búsqueda: incluye títulos de directivas y omite URLs", 
   assert.match(text, /Preparar entorno/);
   assert.match(text, /docs/);
   assert.doesNotMatch(text, /example\.com/);
+});
+
+test("atributos permitidos por directiva, con variantes de idioma solo donde corresponde", () => {
+  assert.equal(isKnownAttribute("step", "title.en"), true);
+  assert.equal(isKnownAttribute("step", "answer"), false);
+  assert.equal(isKnownAttribute("question", "answer.es"), true);
+  assert.equal(isKnownAttribute("question", "points"), true);
+  assert.equal(isKnownAttribute("question", "type.es"), false);
+  assert.equal(isKnownAttribute("hint", "id"), false);
+  assert.equal(isKnownAttribute("inventada", "id"), false);
+});
+
+test("listas de nivel superior: rango de líneas, casillas y texto sin viñeta", () => {
+  const source = ["¿Pregunta?", "", "- [ ] uno", "- [x] **dos**", "  sigue", "", "```", "- [x] en código", "```", "", "1. a", "2. b :: c", ""].join("\n");
+  const { lines, lists } = plainRenderer.listsOf(source);
+  assert.equal(lines[0], "¿Pregunta?");
+  assert.deepEqual(lists.map((l) => [l.ordered, l.start, l.end]), [[false, 2, 6], [true, 10, 12]], "el rango incluye la línea en blanco final");
+  assert.deepEqual(lists[0].items, [{ text: "uno", task: false }, { text: "**dos**\nsigue", task: true }]);
+  assert.deepEqual(lists[1].items, [{ text: "a", task: null }, { text: "b :: c", task: null }]);
 });

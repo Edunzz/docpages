@@ -5,13 +5,13 @@
 ## Antes de empezar
 
 - Node.js 22 o superior y npm. Instala con `npm ci` (no `npm install`) para respetar el `package-lock.json`.
-- Lee el skill [`.github/skills/documentation-pages/SKILL.md`](.github/skills/documentation-pages/SKILL.md): define los formatos `.steps.md` y `.test.md`, los modos y las reglas de seguridad.
+- Lee el skill [`.github/skills/documentation-pages/SKILL.md`](.github/skills/documentation-pages/SKILL.md): define los tres tipos de documento (procedimientos y guías de laboratorio en `.steps.md`, pruebas de práctica en `.test.md`), los siete tipos de pregunta, los modos y las reglas de seguridad.
 
 ## Flujo de trabajo
 
 1. Crea una rama desde `main`: `git switch -c docs/mi-cambio`.
 2. Haz el cambio:
-   - **Documentos:** en `documents/steps` o `documents/tests`, en kebab-case y con ambos idiomas siempre que puedas. Si cambias un documento de forma significativa, sube su `version`.
+   - **Documentos:** en `documents/steps` o `documents/tests`, en kebab-case y con ambos idiomas siempre que puedas. Todo `.md` dentro de `documents/` debe seguir el formato: si no, la validación falla. Si cambias un documento de forma significativa, sube su `version`.
    - **Código:** módulos ES sin globales y sin acceso al DOM al importarse, para que corran en Node y en jsdom.
 3. Comprueba en local:
 
@@ -41,6 +41,7 @@
 - Los estados se comunican con icono, texto y color, nunca solo con color. Respeta el foco visible y `prefers-reduced-motion`.
 - Comentarios en español, breves, que expliquen el porqué.
 - Toda corrección o funcionalidad nueva incluye su prueba en `tests/`.
+- La documentación existe en inglés ([README.md](README.md)) y en español ([README.es.md](README.es.md)): actualiza las dos. Sus ejemplos de Markdown se validan en las pruebas.
 
 ## Dependencias y seguridad
 

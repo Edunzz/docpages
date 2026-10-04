@@ -22,7 +22,7 @@ export const plainRenderer = createMarkdownRenderer({ markdownit });
 
 /** Analiza un documento en memoria con las mismas reglas que el CI. */
 export function analyze(pathName, source, { languages = ["es", "en"] } = {}) {
-  return analyzeDocument({ path: pathName, source, yaml, schemas: SCHEMAS, countTasks: plainRenderer.countTasks, languages });
+  return analyzeDocument({ path: pathName, source, yaml, schemas: SCHEMAS, renderer: plainRenderer, languages });
 }
 
 /** Storage en memoria compatible con la API de localStorage. */

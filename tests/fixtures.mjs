@@ -59,38 +59,84 @@ slug: "prueba-x"
 type: "test"
 version: "2.1.0"
 updated: "2026-10-03"
-status: "failed"
-executedAt: "2026-10-03T20:00:00-05:00"
-environment: { es: "QA", en: "QA" }
-summary: { passed: 1, failed: 1, blocked: 1, total: 3 }
+passingScore: 60
 ---
 
-## Objetivo
+## Introducción
 
 Texto.
 
-:::testcase id="c1" title.es="Caso 1" title.en="Case 1" status="passed"
-**Esperado:** a
+:::question id="q-single" type="single" points="2"
+¿Cuál es la capital de Perú?
+- [ ] Cusco
+- [x] Lima
+- [ ] Arequipa
 
-**Obtenido:** a
-
-:::evidence type="link" label.es="Ver" label.en="View"
-https://example.com/run/1
-:::
-
-:::evidence type="image" label.es="Captura" label.en="Screenshot"
-img/c1.png
+:::explanation
+Lima es la capital.
 :::
 :::
 
-:::testcase id="c2" title.es="Caso 2" title.en="Case 2" status="failed"
-**Esperado:** b
+:::question id="q-multi" type="multiple"
+:::lang es
+¿Qué colores son primarios?
+:::
+:::lang en
+Which colors are primary?
 :::
 
-:::testcase id="c3" title.es="Caso 3" title.en="Case 3" status="blocked"
-Bloqueado por el entorno.
+- [x] Rojo
+- [x] Azul
+- [ ] Verde
+:::
+
+:::question id="q-tf" type="true-false" answer="verdadero"
+El agua hierve a 100 °C al nivel del mar.
+:::
+
+:::question id="q-text" type="text" answer.es="Lima|Ciudad de Lima" answer.en="Lima"
+¿Capital de Perú?
+
+:::hint
+Empieza por L.
+:::
+:::
+
+:::question id="q-number" type="number" answer="3,14" tolerance="0.01"
+Valor de pi con dos decimales.
+:::
+
+:::question id="q-order" type="order"
+Ordena:
+
+1. uno
+2. dos
+3. tres
+:::
+
+:::question id="q-match" type="match"
+Relaciona:
+
+- Perú :: Lima
+- Chile :: Santiago
+- Bolivia :: La Paz
 :::
 `;
+
+/** Una pregunta suelta dentro de una prueba mínima válida (para probar errores). */
+export function quizWith(question, frontMatter = "") {
+  return `---
+title: { es: "Prueba", en: "Test" }
+description: { es: "Descripción", en: "Description" }
+slug: "prueba-y"
+type: "test"
+version: "1.0.0"
+updated: "2026-10-03"
+${frontMatter}---
+
+${question}
+`;
+}
 
 /** Reemplaza una línea del front matter (`clave: …`) en un documento de ejemplo. */
 export function withFrontMatter(source, key, value) {

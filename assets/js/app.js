@@ -6,10 +6,10 @@
  *
  * Rutas (hash, para funcionar igual en la raíz y bajo /{repositorio}/ sin
  * configurar el servidor):
- *   #/                       portada (búsqueda, procedimientos y pruebas)
- *   #/?type=steps|test       portada filtrada por tipo
- *   #/steps/{slug}[/{paso}]  procedimiento
- *   #/tests/{slug}[/{caso}]  prueba
+ *   #/                          portada (búsqueda y las tres categorías)
+ *   #/?type={categoría}         portada filtrada: procedure | lab-guide | practice-test
+ *   #/steps/{slug}[/{paso}]     procedimiento o guía de laboratorio
+ *   #/tests/{slug}[/{pregunta}] prueba de práctica
  *
  * Fuente de datos: `documents.manifest.json` (generado en el despliegue). Con
  * «Actualizar desde el repositorio público» se reemplaza durante la sesión
@@ -25,10 +25,25 @@ import { createI18n } from "./i18n.js";
 import { createStore, browserStorage, documentStateKey, liveManifestKey } from "./storage.js";
 import { resolveRepository, repositoryTokens, refreshFromGitHub } from "./github.js";
 import { createMarkdownRenderer, prismHighlighter, expandTokens, dirname } from "./markdown.js";
-import { analyzeDocument, buildManifestEntry, findDuplicateSlugs, isDocumentPath, enabledTypes, normalizeMode, filterByMode, typeFromRoute, routeFor } from "./documents.js";
+import {
+  analyzeDocument,
+  buildManifestEntry,
+  invalidEntry,
+  findDuplicateSlugs,
+  isCandidatePath,
+  enabledTypes,
+  enabledCategories,
+  categoryOf,
+  normalizeCategory,
+  normalizeMode,
+  filterByMode,
+  typeFromRoute,
+  routeFor,
+} from "./documents.js";
 import { renderStepsView } from "./steps.js";
-import { renderTestView } from "./tests.js";
-import { h, icon, setIcon, statusBadge, progressBar, markExternal } from "./ui.js";
+import { renderQuizView } from "./quiz.js";
+import { CATEGORY_ICONS } from "./icons.js";
+import { h, icon, setIcon, progressBar, markExternal } from "./ui.js";
 
 export const THEME_STORAGE_KEY = "docpages:theme";
 
@@ -69,7 +84,7 @@ const localizedValues = (value) => (value && typeof value === "object" ? Object.
 
 export function searchIndexText(entry) {
   return normalizeText(
-    [...localizedValues(entry.title), ...localizedValues(entry.description), ...(entry.tags || []), entry.slug, entry.author, ...localizedValues(entry.environment), entry.searchText].filter(Boolean).join(" "),
+    [...localizedValues(entry.title), ...localizedValues(entry.description), ...(entry.tags || []), entry.slug, entry.author, entry.searchText].filter(Boolean).join(" "),
   );
 }
 
@@ -123,7 +138,7 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     lightboxCaption: byId("lightbox-caption"),
     lightboxClose: byId("lightbox-close"),
   };
-  const app = { deployed: null, manifest: null, repo: null, schemas: null, view: null, renderToken: 0, docCache: new Map(), notice: null, query: "", homeType: "all", started: false };
+  const app = { deployed: null, manifest: null, repo: null, schemas: null, view: null, renderToken: 0, docCache: new Map(), notice: null, query: "", homeCategory: "all", started: false };
   const siteTitle = () => i18n.localize(config.siteTitle);
   const liveKey = () => liveManifestKey({ prefix: config.storagePrefix, repository: app.repo });
   const formatPercent = (value) => new Intl.NumberFormat(i18n.lang, { style: "percent", maximumFractionDigits: 0 }).format(value / 100);
@@ -234,11 +249,14 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     return text;
   }
 
-  function stepsSummary(entry) {
-    const key = documentStateKey({ prefix: config.storagePrefix, repository: app.repo, slug: entry.slug, version: entry.version, type: "steps" });
+  /** Estado guardado: avance (procedimientos y guías) o intento en curso (pruebas). */
+  function savedState(entry) {
+    const key = documentStateKey({ prefix: config.storagePrefix, repository: app.repo, slug: entry.slug, version: entry.version, type: entry.type });
     const saved = store.getJSON(key);
-    return saved && saved.summary && typeof saved.summary.percent === "number" ? saved.summary : null;
+    return saved && saved.summary && typeof saved.summary.percent === "number" ? saved : null;
   }
+
+  const analyze = (path, text) => analyzeDocument({ path, source: text, yaml: libs.yaml, schemas: app.schemas, renderer, languages: config.languages });
 
   // ── Vistas ────────────────────────────────────────────────────────────────
   function viewContext({ entry, tokens, docBaseUrl, docDir }) {
@@ -263,11 +281,12 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
         return target && enabledTypes(activeMode).includes(target.type) ? routeFor(target) : null;
       },
       renderMarkdown: (text) => renderer.renderFragment(expandTokens(text, tokens)),
+      renderInline: (text) => renderer.renderInlineFragment(expandTokens(text, tokens)),
       openLightbox,
     };
   }
 
-  function messageView({ title, body = "", details = [], iconName = "triangle-alert", retry = false }) {
+  function messageView({ title, body = "", hint = "", details = [], iconName = "triangle-alert", retry = false }) {
     return h(
       doc,
       "section",
@@ -276,6 +295,7 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
       h(doc, "h1", { id: "message-title", tabindex: "-1", text: title }),
       body ? h(doc, "p", { class: "lead", text: body }) : null,
       details.length ? h(doc, "ul", { class: "error-list" }, details.map((d) => h(doc, "li", {}, h(doc, "code", { text: d.where }), " ", d.message))) : null,
+      hint ? h(doc, "p", { class: "hint", text: hint }) : null,
       h(
         doc,
         "p",
@@ -319,27 +339,34 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
       raw: config.github.raw,
       maxDocuments: config.github.maxDocuments,
       timeoutMs: config.github.timeoutMs,
-      isDocumentPath: (path) => isDocumentPath(path, activeMode),
+      isDocumentPath: (path) => isCandidatePath(path, activeMode),
+      // Un documento con errores no se descarta: la portada lo muestra con sus errores.
       analyze: async ({ path, text, rawUrl }) => {
-        const analysis = analyzeDocument({ path, source: text, yaml: libs.yaml, schemas: app.schemas, countTasks: renderer.countTasks, languages: config.languages });
-        if (analysis.errors.length) throw new Error(analysis.errors.map((e) => (e.line ? `L${e.line}: ${e.message}` : e.message)).join(" "));
+        const analysis = analyze(path, text);
+        if (analysis.errors.length) return invalidEntry(analysis, { rawUrl });
         return buildManifestEntry(analysis, { hash: await sha256(win, text), size: text.length, rawUrl });
       },
     });
 
     if (result.ok) {
-      const duplicates = findDuplicateSlugs(result.manifest.documents.map((d) => ({ path: d.path, meta: { slug: d.slug } })));
-      const dropped = new Set(duplicates.flatMap((d) => d.paths.slice(1)));
-      result.manifest.documents = result.manifest.documents.filter((d) => !dropped.has(d.path));
+      const documents = result.manifest.documents;
+      for (const duplicate of findDuplicateSlugs(documents.filter((d) => !d.invalid).map((d) => ({ path: d.path, meta: { slug: d.slug } })))) {
+        for (const path of duplicate.paths) {
+          const index = documents.findIndex((d) => d.path === path);
+          documents[index] = invalidEntry({ ...documents[index], errors: [{ line: null, message: duplicate.message }] }, { rawUrl: documents[index].rawUrl });
+        }
+      }
       app.manifest = result.manifest;
       app.docCache.clear();
       session.setJSON(liveKey(), result.manifest);
-      const skipped = (result.skipped || []).length + dropped.size;
-      const messages = [t("repo.refreshed", { count: result.manifest.documents.length, repo: app.repo.fullName })];
+      const invalid = documents.filter((d) => d.invalid).length;
+      const skipped = (result.skipped || []).length;
+      const messages = [t("repo.refreshed", { count: documents.length - invalid, repo: app.repo.fullName })];
+      if (invalid) messages.push(t("repo.invalid", { count: invalid }));
       if (skipped) messages.push(t("repo.skipped", { count: skipped }));
       if (result.truncated) messages.push(t("repo.truncated"));
-      app.notice = { kind: skipped || result.truncated ? "warning" : "success", messages };
-      if (skipped && win.console) win.console.warn("[docpages] Documentos omitidos:", result.skipped, [...dropped]);
+      app.notice = { kind: invalid || skipped ? "error" : result.truncated ? "warning" : "success", messages };
+      if (skipped && win.console) win.console.warn("[docpages] Documentos que no se pudieron leer:", result.skipped);
     } else {
       app.notice = { kind: "error", messages: [errorMessage(result.error)] };
     }
@@ -358,10 +385,13 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
   }
 
   function renderHome(params) {
-    const documents = filterByMode(app.manifest.documents, activeMode);
-    const types = enabledTypes(activeMode);
-    if (params.type && types.includes(params.type)) app.homeType = params.type;
-    if (!types.includes(app.homeType)) app.homeType = "all";
+    const visible = filterByMode(app.manifest.documents, activeMode);
+    const documents = visible.filter((d) => !d.invalid);
+    const invalid = visible.filter((d) => d.invalid);
+    const categories = enabledCategories(activeMode);
+    const requested = normalizeCategory(params.type);
+    if (requested && categories.includes(requested)) app.homeCategory = requested;
+    if (app.homeCategory !== "all" && !categories.includes(app.homeCategory)) app.homeCategory = "all";
     const live = app.manifest.source === "github";
 
     // Hero con origen del contenido.
@@ -394,28 +424,28 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
       noticeView(),
     );
 
-    // Búsqueda y filtro por tipo.
+    // Búsqueda y filtro por categoría.
     const searchInput = h(doc, "input", { type: "search", id: "search", class: "search__input", placeholder: t("home.searchPlaceholder"), autocomplete: "off", spellcheck: "false", "aria-describedby": "search-status" });
     searchInput.value = app.query;
     const searchStatus = h(doc, "p", { id: "search-status", class: "search__status", role: "status" });
     const search = h(doc, "div", { class: "search", role: "search" }, h(doc, "label", { for: "search", class: "sr-only", text: t("home.searchLabel") }), icon(doc, "search", { className: "search__icon" }), searchInput, searchStatus);
 
-    const typeButtons = new Map();
+    const filterButtons = new Map();
     const filter =
-      types.length > 1
+      categories.length > 1
         ? h(
             doc,
             "div",
             { class: "segmented", role: "group", "aria-label": t("home.filter") },
-            ["all", ...types].map((type) => {
-              const count = type === "all" ? documents.length : documents.filter((d) => d.type === type).length;
-              const label = type === "all" ? t("home.filterAll") : type === "steps" ? t("section.steps") : t("section.tests");
-              const button = h(doc, "button", { type: "button", class: "segmented__option", "aria-pressed": "false" }, label, h(doc, "span", { class: "segmented__count", text: String(count) }));
+            ["all", ...categories].map((category) => {
+              const count = category === "all" ? documents.length : documents.filter((d) => categoryOf(d) === category).length;
+              const label = category === "all" ? t("home.filterAll") : t(`section.${category}`);
+              const button = h(doc, "button", { type: "button", class: "segmented__option", "aria-pressed": "false", dataset: { category } }, label, h(doc, "span", { class: "segmented__count", text: String(count) }));
               button.addEventListener("click", () => {
-                app.homeType = type;
+                app.homeCategory = category;
                 applyFilters();
               });
-              typeButtons.set(type, button);
+              filterButtons.set(category, button);
               return button;
             }),
           )
@@ -423,45 +453,48 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
 
     // Secciones y tarjetas.
     const cards = [];
-    const sections = types.map((type) => {
-      const isSteps = type === "steps";
-      const docs = documents.filter((d) => d.type === type);
-      const titleId = `section-${type}`;
-      const list = h(doc, "ul", { class: "card-grid" }, docs.map((entry) => {
-        const card = renderCard(entry);
-        cards.push({ entry, card, index: searchIndexText(entry) });
-        return card;
-      }));
-      const empty = h(doc, "p", { class: "empty", hidden: docs.length > 0, text: t("home.empty", { folder: `/documents/${isSteps ? "steps" : "tests"}` }) });
+    const sections = categories.map((category) => {
+      const docs = documents.filter((d) => categoryOf(d) === category);
+      const titleId = `section-${category}`;
+      const list = h(
+        doc,
+        "ul",
+        { class: "card-grid" },
+        docs.map((entry) => {
+          const card = renderCard(entry);
+          cards.push({ entry, category, card, index: searchIndexText(entry) });
+          return card;
+        }),
+      );
+      const empty = h(doc, "p", { class: "empty", hidden: docs.length > 0 });
       const count = h(doc, "span", { class: "section-count" });
       const section = h(
         doc,
         "section",
-        { class: ["doc-section", `doc-section--${type}`], "aria-labelledby": titleId, dataset: { type } },
-        h(doc, "div", { class: "doc-section__head" }, h(doc, "h2", { id: titleId, class: "section-title" }, icon(doc, isSteps ? "list-checks" : "flask-conical"), h(doc, "span", { text: isSteps ? t("section.steps") : t("section.tests") }), count), h(doc, "p", { class: "hint", text: isSteps ? t("section.stepsHint") : t("section.testsHint") })),
+        { class: ["doc-section", `doc-section--${category}`], "aria-labelledby": titleId, dataset: { category } },
+        h(doc, "div", { class: "doc-section__head" }, h(doc, "h2", { id: titleId, class: "section-title" }, icon(doc, CATEGORY_ICONS[category]), h(doc, "span", { text: t(`section.${category}`) }), count), h(doc, "p", { class: "hint", text: t(`section.hint.${category}`) })),
         list,
         empty,
       );
-      return { type, section, count, empty, docs };
+      return { category, section, count, empty, docs };
     });
 
     function applyFilters() {
       app.query = searchInput.value;
       let total = 0;
-      for (const { entry, card, index } of cards) {
-        const show = (app.homeType === "all" || app.homeType === entry.type) && matchesQuery(entry, app.query, index);
+      for (const { category, card, entry, index } of cards) {
+        const show = (app.homeCategory === "all" || app.homeCategory === category) && matchesQuery(entry, app.query, index);
         card.hidden = !show;
         if (show) total += 1;
       }
       for (const s of sections) {
-        const visible = cards.filter((c) => c.entry.type === s.type && !c.card.hidden).length;
-        s.section.hidden = app.homeType !== "all" && app.homeType !== s.type;
-        s.count.textContent = String(visible);
-        s.empty.hidden = visible > 0;
-        if (!s.docs.length) s.empty.textContent = t("home.empty", { folder: `/documents/${s.type === "steps" ? "steps" : "tests"}` });
-        else if (!visible) s.empty.textContent = t("home.noResults", { query: app.query.trim() });
+        const shown = cards.filter((c) => c.category === s.category && !c.card.hidden).length;
+        s.section.hidden = app.homeCategory !== "all" && app.homeCategory !== s.category;
+        s.count.textContent = String(shown);
+        s.empty.hidden = shown > 0;
+        s.empty.textContent = s.docs.length ? t("home.noResults", { query: app.query.trim() }) : t(`home.empty.${s.category}`);
       }
-      for (const [type, button] of typeButtons) button.setAttribute("aria-pressed", String(type === app.homeType));
+      for (const [category, button] of filterButtons) button.setAttribute("aria-pressed", String(category === app.homeCategory));
       searchStatus.textContent = app.query.trim() ? t("home.results", { count: total }) : t("home.documents", { count: total });
     }
 
@@ -469,32 +502,78 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     applyFilters();
 
     doc.title = siteTitle();
-    return h(doc, "div", { class: "home" }, hero, h(doc, "div", { class: "toolbar" }, search, filter), sections.map((s) => s.section));
+    return h(doc, "div", { class: "home" }, hero, invalid.length ? renderInvalid(invalid) : null, h(doc, "div", { class: "toolbar" }, search, filter), sections.map((s) => s.section));
+  }
+
+  /** Documentos que no siguen el formato (solo aparecen al leer en vivo desde GitHub). */
+  function renderInvalid(entries) {
+    const branch = (app.manifest.repository && app.manifest.repository.branch) || (app.repo && app.repo.branch) || "main";
+    const encodePath = (path) => path.split("/").map(encodeURIComponent).join("/");
+    return h(
+      doc,
+      "section",
+      { class: "invalid-docs", "aria-labelledby": "invalid-title" },
+      h(doc, "h2", { id: "invalid-title", class: "section-title" }, icon(doc, "file-warning"), h(doc, "span", { text: t("home.invalidTitle") }), h(doc, "span", { class: "section-count", text: String(entries.length) })),
+      h(doc, "p", { class: "invalid-docs__hint", text: t("home.invalidHint") }),
+      h(
+        doc,
+        "ul",
+        { class: "invalid-docs__list" },
+        entries.map((entry) => {
+          let source = null;
+          if (app.repo) {
+            source = h(doc, "a", { class: "invalid-doc__source", href: `${app.repo.url}/blob/${encodePath(branch)}/${encodePath(entry.path)}` }, icon(doc, "github"), h(doc, "span", { text: t("home.invalidOpen") }));
+            markExternal(doc, t, source);
+          }
+          return h(
+            doc,
+            "li",
+            { class: "invalid-doc" },
+            h(doc, "p", { class: "invalid-doc__path" }, icon(doc, "file-text"), h(doc, "code", { text: entry.path }), source),
+            h(doc, "ul", { class: "error-list" }, (entry.errors || []).map((e) => h(doc, "li", {}, h(doc, "code", { text: e.line ? t("home.line", { line: e.line }) : "—" }), " ", e.message))),
+          );
+        }),
+      ),
+    );
   }
 
   function renderCard(entry) {
-    const isSteps = entry.type === "steps";
+    const category = categoryOf(entry);
+    const saved = savedState(entry);
+    const summary = saved && saved.summary;
     const titleId = `card-${entry.type}-${entry.slug}`;
     let status;
-    if (isSteps) {
-      const summary = stepsSummary(entry);
-      const bar = progressBar(doc, { label: `${i18n.localize(entry.title)}: ${t("steps.progress")}`, className: "progress--small" });
-      bar.update(summary ? summary.percent : 0, summary ? t("card.progress", { percent: formatPercent(summary.percent) }) : t("card.notStarted"));
-      status = h(doc, "div", { class: "card__status" }, bar.element, h(doc, "span", { class: "card__status-text", text: summary ? t("card.progress", { percent: formatPercent(summary.percent) }) : t("card.notStarted") }));
+    if (entry.type === "steps") {
+      const text = summary ? t("card.progress", { percent: formatPercent(summary.percent) }) : t("card.notStarted");
+      const bar = progressBar(doc, { label: `${i18n.localize(entry.title)}: ${t(`steps.progress.${category}`)}`, className: "progress--small" });
+      bar.update(summary ? summary.percent : 0, text);
+      status = h(doc, "div", { class: "card__status" }, bar.element, h(doc, "span", { class: "card__status-text", text }));
     } else {
-      const summary = entry.summary || { passed: 0, total: 0 };
-      status = h(doc, "div", { class: "card__status" }, statusBadge(doc, t, entry.status || "not-run"), h(doc, "span", { class: "card__status-text", text: t("card.cases", { passed: summary.passed || 0, total: summary.total || 0 }) }));
+      const parts = [];
+      let badge = null;
+      if (summary && summary.finished) {
+        badge = h(doc, "span", { class: ["badge", summary.passed ? "status--passed" : "status--failed"] }, icon(doc, summary.passed ? "trophy" : "circle-x"), h(doc, "span", { text: t(summary.passed ? "quiz.passed" : "quiz.failed") }));
+        parts.push(t("card.lastResult", { percent: formatPercent(summary.percent) }));
+      } else if (summary && summary.answered) {
+        parts.push(t("card.inProgress", { answered: summary.answered, total: summary.questions }));
+      } else {
+        parts.push(t("card.notTaken"));
+      }
+      if (saved && saved.attempts && typeof saved.best === "number") parts.push(t("card.best", { percent: formatPercent(saved.best) }));
+      status = h(doc, "div", { class: "card__status" }, badge, h(doc, "span", { class: "card__status-text", text: parts.join(" · ") }));
     }
     const facts = [
       h(doc, "span", {}, icon(doc, "calendar"), t("card.updated", { date: i18n.formatDate(entry.updated) })),
       h(doc, "span", {}, icon(doc, "git-commit-horizontal"), `v${entry.version}`),
-      isSteps && entry.stepCount ? h(doc, "span", {}, icon(doc, "list-checks"), t("card.steps", { count: entry.stepCount })) : null,
+      entry.type === "steps" && entry.stepCount ? h(doc, "span", {}, icon(doc, "list-checks"), t("card.steps", { count: entry.stepCount })) : null,
+      entry.type === "test" && entry.questionCount ? h(doc, "span", {}, icon(doc, "circle-help"), t("card.questions", { count: entry.questionCount })) : null,
+      entry.duration ? h(doc, "span", {}, icon(doc, "timer"), i18n.localize(entry.duration)) : null,
     ];
     return h(
       doc,
       "li",
-      { class: ["card", `card--${entry.type}`], dataset: { slug: entry.slug } },
-      h(doc, "p", { class: "card__type" }, icon(doc, isSteps ? "list-checks" : "flask-conical"), h(doc, "span", { text: t(`doc.type.${entry.type}`) })),
+      { class: ["card", `card--${category}`], dataset: { slug: entry.slug } },
+      h(doc, "p", { class: "card__type" }, icon(doc, CATEGORY_ICONS[category]), h(doc, "span", { text: t(`category.${category}`) })),
       h(doc, "h3", { class: "card__title", id: titleId }, h(doc, "a", { class: "card__link", href: routeFor(entry), text: i18n.localize(entry.title) })),
       entry.description ? h(doc, "p", { class: "card__desc", text: i18n.localize(entry.description) }) : null,
       status,
@@ -503,10 +582,21 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     );
   }
 
+  function invalidView(entry, errors) {
+    return messageView({
+      title: t("doc.invalid"),
+      body: entry.path,
+      hint: t("doc.invalidHint"),
+      details: errors.map((e) => ({ where: e.line ? `${entry.path}:${e.line}` : entry.path, message: e.message })),
+      iconName: "file-warning",
+    });
+  }
+
   async function renderDocument(route, token) {
     if (!enabledTypes(activeMode).includes(route.type)) return messageView({ title: t("doc.notFound"), body: t("doc.disabled"), iconName: "ban" });
     const entry = app.manifest.documents.find((d) => d.type === route.type && d.slug === route.slug);
     if (!entry) return messageView({ title: t("doc.notFound"), body: t("doc.notFoundBody"), iconName: "file-text" });
+    if (entry.invalid) return invalidView(entry, entry.errors || []);
 
     let text;
     try {
@@ -517,10 +607,8 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     }
     if (token !== app.renderToken) return null;
 
-    const analysis = analyzeDocument({ path: entry.path, source: text, yaml: libs.yaml, schemas: app.schemas, countTasks: renderer.countTasks, languages: config.languages });
-    if (analysis.errors.length) {
-      return messageView({ title: t("doc.invalid"), body: entry.path, details: analysis.errors.map((e) => ({ where: e.line ? `${entry.path}:${e.line}` : entry.path, message: e.message })) });
-    }
+    const analysis = analyze(entry.path, text);
+    if (analysis.errors.length) return invalidView(entry, analysis.errors);
     const meta = analysis.meta;
     const tokens = {
       ...repositoryTokens(app.repo),
@@ -531,9 +619,10 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
       updated: meta.updated,
       slug: meta.slug,
     };
-    const ctx = viewContext({ entry, tokens, docBaseUrl: documentUrl(entry), docDir: dirname(entry.path) });
+    const current = { ...entry, category: analysis.category };
+    const ctx = viewContext({ entry: current, tokens, docBaseUrl: documentUrl(entry), docDir: dirname(entry.path) });
     const stateKey = documentStateKey({ prefix: config.storagePrefix, repository: app.repo, slug: meta.slug, version: meta.version, type: entry.type });
-    const view = entry.type === "steps" ? renderStepsView(ctx, { entry, analysis, stateKey, anchor: route.anchor }) : renderTestView(ctx, { entry, analysis, stateKey, anchor: route.anchor });
+    const view = entry.type === "steps" ? renderStepsView(ctx, { entry: current, analysis, stateKey, anchor: route.anchor }) : renderQuizView(ctx, { entry: current, analysis, stateKey });
     view.key = `${entry.type}:${entry.slug}`;
     view.lang = i18n.lang;
     doc.title = `${i18n.localize(meta.title)} · ${siteTitle()}`;
@@ -573,11 +662,13 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     if (route.name !== "home") app.notice = null;
     els.view.replaceChildren(element);
     els.view.removeAttribute("aria-busy");
-    if (route.name === "doc" && view && route.anchor) view.focusAnchor(route.anchor);
+    // Con ancla (#/…/paso o #/…/pregunta) el foco va a ese elemento, no al título.
+    const anchored = Boolean(route.name === "doc" && view && route.anchor);
+    if (anchored) view.focusAnchor(route.anchor);
     else if (preserveScroll && typeof win.scrollTo === "function") win.scrollTo(0, scrollY);
     else if (app.started && typeof win.scrollTo === "function") win.scrollTo(0, 0);
 
-    if (app.started && !preserveScroll) {
+    if (app.started && !preserveScroll && !anchored) {
       const heading = keepFocus ? null : els.view.querySelector("h1[tabindex]");
       if (heading) heading.focus({ preventScroll: true });
     }

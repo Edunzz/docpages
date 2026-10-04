@@ -160,7 +160,8 @@ const encodePath = (path) => path.split("/").map(encodeURIComponent).join("/");
 /**
  * Lee el repositorio público: metadatos, árbol de archivos y cada Markdown.
  * `analyze({ path, text, rawUrl })` convierte un documento en entrada de
- * manifiesto (o lanza si es inválido); así este módulo no conoce el formato.
+ * manifiesto (válida o marcada `invalid` con sus errores); así este módulo no
+ * conoce el formato. Si la lectura falla, el documento va a `skipped`.
  */
 export async function fetchLiveDocuments({
   repository,

@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { VALID_STEPS, VALID_TEST, makeSite } from "./fixtures.mjs";
+import { VALID_STEPS, VALID_TEST, makeSite, withFrontMatter } from "./fixtures.mjs";
 import { generateManifest, ManifestError } from "../scripts/build-manifest.mjs";
 import { buildSite } from "../scripts/build-site.mjs";
 import { repositoryFromEnv, hashSource } from "../scripts/lib/docs.mjs";
@@ -17,18 +17,21 @@ test("genera el manifiesto: orden determinista, hashes, conteos y autoría", asy
     "documents/tests/prueba-x.test.md": VALID_TEST,
     "documents/steps/z.steps.md": VALID_STEPS.replace('slug: "pasos-prueba"', 'slug: "zeta"'),
     "documents/steps/a.steps.md": VALID_STEPS,
-    "documents/steps/notas.md": "# no es un documento",
+    "documents/steps/lab.steps.md": withFrontMatter(VALID_STEPS.replace('slug: "pasos-prueba"', 'slug: "lab"'), "kind", '"lab-guide"'),
+    "documents/tests/img/no-es-markdown.png": "png",
   });
   const manifest = await generateManifest({ root, env: {}, now: NOW });
   assert.equal(manifest.generatedAt, "2026-10-03T12:00:00.000Z");
   assert.equal(manifest.mode, "all");
   assert.equal(manifest.repository, null);
-  assert.deepEqual(manifest.counts, { steps: 2, tests: 1 });
-  assert.deepEqual(manifest.documents.map((d) => d.path), ["documents/steps/a.steps.md", "documents/steps/z.steps.md", "documents/tests/prueba-x.test.md"]);
+  assert.equal(manifest.schemaVersion, 2);
+  assert.deepEqual(manifest.counts, { procedures: 2, labGuides: 1, practiceTests: 1 });
+  assert.deepEqual(manifest.documents.map((d) => d.path), ["documents/steps/a.steps.md", "documents/steps/z.steps.md", "documents/steps/lab.steps.md", "documents/tests/prueba-x.test.md"], "procedimientos, guías y pruebas; después por ruta");
   assert.equal(manifest.documents[0].hash, hashSource(VALID_STEPS));
   assert.equal(manifest.documents[0].size, Buffer.byteLength(VALID_STEPS));
   assert.deepEqual(manifest.generator, { name: "docpages", author: "Jose Eduardo Romero Jimenez", authorUrl: "https://github.com/Edunzz", version: "1.0.0" });
-  assert.equal(manifest.documents[2].status, "failed");
+  assert.equal(manifest.documents[3].questionCount, 7);
+  assert.equal(manifest.documents[2].category, "lab-guide");
 
   // Misma entrada → mismo resultado.
   assert.deepEqual(await generateManifest({ root, env: {}, now: NOW }), manifest);
@@ -42,6 +45,16 @@ test("toma el repositorio de las variables de GitHub Actions", async () => {
   const root = await makeSite({ "documents/steps/a.steps.md": VALID_STEPS });
   const manifest = await generateManifest({ root, env, now: NOW });
   assert.equal(manifest.repository.url, "https://github.com/Mi-Org/mi-repo");
+});
+
+test("un Markdown fuera de formato en /documents bloquea el manifiesto", async () => {
+  const root = await makeSite({ "documents/steps/a.steps.md": VALID_STEPS, "documents/steps/notas.md": "# no es un documento" });
+  await assert.rejects(generateManifest({ root, env: {}, now: NOW }), (error) => {
+    assert.ok(error instanceof ManifestError);
+    assert.match(error.report, /✖ documents\/steps\/notas\.md/);
+    assert.match(error.report, /El archivo no sigue el formato/);
+    return true;
+  });
 });
 
 test("falla con un informe claro si algún documento es inválido", async () => {
@@ -62,4 +75,14 @@ test("el sitio construido solo incluye archivos publicables y respeta el modo", 
   assert.deepEqual(await readdir(path.join(out, "documents")), ["steps"]);
   assert.equal(await readFile(path.join(out, ".nojekyll"), "utf8"), "");
   await assert.rejects(buildSite({ root, out: "." }), /raíz del repositorio/);
+});
+
+test("en GitHub Actions cada error se anota sobre su archivo y su línea", async () => {
+  const { validate, githubAnnotations } = await import("../scripts/validate-documents.mjs");
+  const broken = VALID_STEPS.replace(':::step id="b"', ':::step id="b" titulo="x"');
+  const root = await makeSite({ "documents/steps/a.steps.md": broken, "documents/notas, 50%.md": "# x" });
+  const lines = githubAnnotations(await validate({ root }));
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /^::error file=documents\/notas%2C 50%25\.md,title=Documento con errores de formato::El archivo no sigue el formato/);
+  assert.match(lines[1], /^::error file=documents\/steps\/a\.steps\.md,line=\d+,title=Documento con errores de formato::Atributo desconocido en «:::step»: titulo/);
 });

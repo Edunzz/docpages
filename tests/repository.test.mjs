@@ -44,8 +44,8 @@ test("todos los archivos de código y scripts incluyen la atribución", async ()
 });
 
 test("todos los iconos usados por la interfaz existen en el catálogo del sprite", async () => {
-  const { ICON_NAMES, STATUS_ICONS, CALLOUT_ICONS } = await import("../assets/js/icons.js");
-  const used = new Set([...Object.values(STATUS_ICONS), ...Object.values(CALLOUT_ICONS)]);
+  const { ICON_NAMES, CATEGORY_ICONS, QUESTION_TYPE_ICONS, CALLOUT_ICONS } = await import("../assets/js/icons.js");
+  const used = new Set([...Object.values(CATEGORY_ICONS), ...Object.values(QUESTION_TYPE_ICONS), ...Object.values(CALLOUT_ICONS)]);
   for (const rel of (await repoFiles()).filter((f) => /^assets\/js\/.+\.js$/.test(f))) {
     const source = await read(rel);
     // icon(doc, "x"), icon(doc, cond ? "x" : "y"), setIcon(el, cond ? "x" : "y") y hechos ["x", t(...)].
@@ -79,11 +79,36 @@ test("el workflow de Pages usa permisos mínimos, concurrencia y acciones fijada
   for (const step of ["npm ci", "npm run validate", "npm run manifest", "npm test", "npm run build"]) assert.ok(workflow.includes(step), step);
 });
 
-test("el skill reutilizable existe y cubre las secciones requeridas", async () => {
+test("el workflow de pull requests solo lee y valida (los errores bloquean el merge)", async () => {
+  const workflow = await read(".github/workflows/validate.yml");
+  assert.match(workflow, /^permissions:\n {2}contents: read\n\n/m);
+  assert.match(workflow, /^on:\n {2}pull_request:/m);
+  assert.doesNotMatch(workflow, /pages: write|id-token|deploy-pages/);
+  for (const action of ["checkout", "setup-node"]) assert.match(workflow, new RegExp(`actions/${action}@[0-9a-f]{40} # v\\d`), action);
+  for (const step of ["npm ci", "npm run validate", "npm run check:links", "npm test"]) assert.ok(workflow.includes(step), step);
+});
+
+test("el skill reutilizable existe y cubre las secciones y los formatos", async () => {
   const skill = await read(".github/skills/documentation-pages/SKILL.md");
   assert.match(skill, /^---\nname: documentation-pages\ndescription: .+\n---/);
-  for (const section of ["Cuándo activarlo", "Prerrequisitos", "Estructura", ".steps.md", ".test.md", "Comandos", "Modos", "Migrar", "Seguridad", "Criterios de aceptación", "Solución de problemas", 'DOCUMENTATION_MODE = "all"']) {
+  for (const section of ["Cuándo activarlo", "Prerrequisitos", "Estructura", ".steps.md", ".test.md", "Guías de laboratorio", "Pruebas de práctica", "Convertir una lista de preguntas", "Comandos", "Modos", "Migrar", "Seguridad", "Criterios de aceptación", "Solución de problemas", 'DOCUMENTATION_MODE = "all"']) {
     assert.ok(skill.includes(section), `falta «${section}»`);
+  }
+  for (const type of ["single", "multiple", "true-false", "text", "number", "order", "match"]) assert.match(skill, new RegExp(`type="${type}"`), type);
+});
+
+test("README en inglés y en español, enlazados entre sí y con los tres tipos de documento", async () => {
+  const en = await read("README.md");
+  const es = await read("README.es.md");
+  assert.match(en, /\(README\.es\.md\)/);
+  assert.match(es, /\(README\.md\)/);
+  for (const words of [["Procedure", "Lab guide", "Practice test"], ["Procedimiento", "Guía de laboratorio", "Prueba de práctica"]]) {
+    const text = words[0] === "Procedure" ? en : es;
+    for (const word of words) assert.ok(text.includes(word), word);
+  }
+  for (const type of ["single", "multiple", "true-false", "text", "number", "order", "match"]) {
+    assert.ok(en.includes(`\`${type}\``), `README.md: ${type}`);
+    assert.ok(es.includes(`\`${type}\``), `README.es.md: ${type}`);
   }
 });
 
@@ -92,4 +117,30 @@ test("el manifiesto versionado está al día con los documentos", async () => {
   const fresh = await generateManifest({ env: {} });
   const strip = (m) => m.documents.map(({ path: p, hash, slug }) => ({ p, hash, slug }));
   assert.deepEqual(strip(committed), strip(fresh), "ejecuta «npm run manifest»");
+});
+
+/** Bloques ```markdown de un texto (admite cercas de 3 o 4 acentos graves). */
+function markdownExamples(text) {
+  return [...text.matchAll(/^(`{3,4})markdown\n([\s\S]*?)\n\1$/gm)].map((m) => m[2]);
+}
+
+// Un fragmento suelto (p. ej. solo bloques :::lang) se completa con un paso mínimo.
+const STEPS_WRAPPER = (body) => `---\ntitle: "Ejemplo"\ndescription: "Ejemplo"\nslug: "ejemplo"\ntype: "steps"\nversion: "1.0.0"\nupdated: "2026-10-04"\n---\n\n${body}\n\n:::step id="zz-ejemplo" title="Ejemplo"\nTexto.\n:::\n`;
+
+test("los ejemplos de Markdown del skill y de los README son documentos válidos", async () => {
+  const { analyze } = await import("./helpers.mjs");
+  const { quizWith } = await import("./fixtures.mjs");
+  for (const file of [".github/skills/documentation-pages/SKILL.md", "README.md", "README.es.md"]) {
+    const examples = markdownExamples(await read(file));
+    assert.ok(examples.length >= 3, `${file}: se esperaban ejemplos`);
+    for (const example of examples) {
+      let source = example;
+      const type = /^type: "test"$/m.test(example) || example.startsWith(":::question") ? "test" : "steps";
+      if (example.startsWith(":::question")) source = quizWith(example);
+      else if (example.startsWith(":::")) source = STEPS_WRAPPER(example);
+      else if (!example.startsWith("---")) continue;
+      const result = analyze(type === "test" ? "documents/tests/ejemplo.test.md" : "documents/steps/ejemplo.steps.md", source);
+      assert.deepEqual(result.errors, [], `${file}:\n${example.slice(0, 200)}`);
+    }
+  }
 });

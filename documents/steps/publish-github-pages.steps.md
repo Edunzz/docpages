@@ -7,10 +7,15 @@ description:
   en: "Guided procedure to create your copy, validate it and publish it with GitHub Pages."
 slug: "publish-github-pages"
 type: "steps"
-version: "1.0.0"
+kind: "procedure"
+version: "1.1.0"
 author: "Jose Eduardo Romero Jimenez"
-updated: "2026-10-03"
+updated: "2026-10-04"
 tags: [github-pages, documentation, getting-started]
+duration:
+  es: "15 minutos"
+  en: "15 minutes"
+level: "beginner"
 links:
   - label:
       es: "Repositorio"
@@ -150,10 +155,10 @@ git push origin main
 :::step id="first-document" title.es="Crear tu primer documento" title.en="Create your first document"
 :::substep id="create-file" title.es="Crear el archivo" title.en="Create the file"
 :::lang es
-Crea `documents/steps/mi-procedimiento.steps.md`. El sufijo decide el tipo y debe coincidir con `type`:
+Crea `documents/steps/mi-procedimiento.steps.md`. El sufijo decide el formato y debe coincidir con `type`; `kind` elige entre procedimiento (`procedure`) y guía de laboratorio (`lab-guide`):
 :::
 :::lang en
-Create `documents/steps/my-procedure.steps.md`. The suffix decides the type and must match `type`:
+Create `documents/steps/my-procedure.steps.md`. The suffix decides the format and must match `type`; `kind` chooses between a procedure (`procedure`) and a lab guide (`lab-guide`):
 :::
 
 ```markdown
@@ -162,8 +167,9 @@ title: { es: "Mi procedimiento", en: "My procedure" }
 description: { es: "Qué logra el lector.", en: "What the reader achieves." }
 slug: "mi-procedimiento"
 type: "steps"
+kind: "procedure"
 version: "1.0.0"
-updated: "2026-10-03"
+updated: "2026-10-04"
 ---
 
 :::step id="uno" title.es="Primer paso" title.en="First step"
@@ -189,8 +195,8 @@ Run `npm run validate`, fix whatever it reports and push. The document will appe
 :::
 
 :::lang es
-¿Algo no funciona? Revisa la sección «Solución de problemas» del README o la [validación de ejemplo](../tests/example.test.md).
+¿Algo no funciona? Revisa la sección «Problemas comunes» del README. ¿Quieres repasar? Haz la [prueba de práctica](../tests/docpages-basics.test.md) o sigue el [laboratorio para crear tu primera prueba](first-practice-test-lab.steps.md).
 :::
 :::lang en
-Something not working? Check the “Troubleshooting” section of the README or the [example validation](../tests/example.test.md).
+Something not working? Check the “Common problems” section of the README. Want to review? Take the [practice test](../tests/docpages-basics.test.md) or follow the [lab to create your first test](first-practice-test-lab.steps.md).
 :::

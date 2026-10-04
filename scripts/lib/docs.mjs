@@ -68,17 +68,14 @@ export async function analyzeAll({ root = ROOT, mode = DOCUMENTATION_MODE } = {}
 
   for (const rel of files) {
     if (!rel.toLowerCase().endsWith(".md")) continue;
+    // Todo Markdown de /documents se analiza: si no sigue el formato, es un error.
     const type = typeFromPath(rel);
-    if (!type) {
-      notes.push({ path: rel, level: "warning", message: "Markdown sin sufijo «.steps.md» ni «.test.md»: no se publica." });
-      continue;
-    }
-    if (!types.includes(type)) {
+    if (type && !types.includes(type)) {
       notes.push({ path: rel, level: "info", message: `Omitido: el modo «${activeMode}» no publica documentos de tipo «${type}».` });
       continue;
     }
     const source = await readFile(path.join(root, rel), "utf8");
-    const result = analyzeDocument({ path: rel, source, yaml, schemas, countTasks: renderer.countTasks, languages: CONFIG.languages });
+    const result = analyzeDocument({ path: rel, source, yaml, schemas, renderer, languages: CONFIG.languages });
     result.source = source;
     results.push(result);
   }

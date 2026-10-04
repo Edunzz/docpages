@@ -11,8 +11,12 @@
  */
 
 export const LUCIDE_ICONS = Object.freeze([
+  "arrow-down",
   "arrow-left",
+  "arrow-left-right",
   "arrow-right",
+  "arrow-up",
+  "award",
   "ban",
   "book-open",
   "calendar",
@@ -20,26 +24,32 @@ export const LUCIDE_ICONS = Object.freeze([
   "chevron-down",
   "circle",
   "circle-check",
-  "circle-dashed",
+  "circle-dot",
   "circle-dot-dashed",
+  "circle-help",
   "circle-x",
   "clipboard-check",
-  "clock",
+  "clipboard-list",
   "copy",
   "external-link",
+  "eye",
   "file-text",
+  "file-warning",
+  "flag",
   "flask-conical",
+  "gauge",
   "git-branch",
   "git-commit-horizontal",
   "globe",
+  "graduation-cap",
+  "hash",
   "house",
   "info",
   "languages",
-  "layers",
   "lightbulb",
   "link",
   "list-checks",
-  "loader-circle",
+  "list-ordered",
   "message-square-warning",
   "moon",
   "octagon-alert",
@@ -47,10 +57,15 @@ export const LUCIDE_ICONS = Object.freeze([
   "refresh-cw",
   "rotate-ccw",
   "search",
-  "server",
+  "square-check",
   "sun",
   "tag",
+  "target",
+  "text-cursor-input",
+  "timer",
+  "toggle-left",
   "triangle-alert",
+  "trophy",
   "user",
   "x",
   "zoom-in",
@@ -60,13 +75,22 @@ export const BRAND_ICONS = Object.freeze(["github"]);
 
 export const ICON_NAMES = Object.freeze([...LUCIDE_ICONS, ...BRAND_ICONS].sort());
 
-export const STATUS_ICONS = Object.freeze({
-  passed: "circle-check",
-  failed: "circle-x",
-  blocked: "ban",
-  partial: "circle-dot-dashed",
-  running: "loader-circle",
-  "not-run": "circle-dashed",
+/** Icono de cada categoría de documento. */
+export const CATEGORY_ICONS = Object.freeze({
+  procedure: "list-checks",
+  "lab-guide": "flask-conical",
+  "practice-test": "graduation-cap",
+});
+
+/** Icono de cada tipo de pregunta de las pruebas de práctica. */
+export const QUESTION_TYPE_ICONS = Object.freeze({
+  single: "circle-dot",
+  multiple: "square-check",
+  "true-false": "toggle-left",
+  text: "text-cursor-input",
+  number: "hash",
+  order: "list-ordered",
+  match: "arrow-left-right",
 });
 
 export const CALLOUT_ICONS = Object.freeze({

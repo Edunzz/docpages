@@ -2,7 +2,9 @@
 // https://github.com/Edunzz
 
 /**
- * steps.js — Procedimientos `{titulo}.steps.md`: modelo de progreso y vista.
+ * steps.js — Procedimientos y guías de laboratorio `{titulo}.steps.md`:
+ * modelo de progreso y vista. Ambos comparten formato; `kind` solo cambia
+ * los textos y la presentación.
  *
  * Modelo de progreso («hojas»): la unidad mínima completable es
  *   - cada casilla `- [ ]`, con clave `{nodo}#{n}`;
@@ -145,6 +147,7 @@ const domId = (prefix, id) => `${prefix}-${String(id).replace(/[^\w-]/g, "_")}`;
 export function renderStepsView(ctx, { entry, analysis, stateKey, anchor = "" }) {
   const { doc, win, t } = ctx;
   const model = analysis.model;
+  const category = analysis.category === "lab-guide" ? "lab-guide" : "procedure";
   let state = restoreStepsState(ctx.store.getJSON(stateKey), model);
   const stepOf = (id) => {
     const node = model.nodesById.get(id);
@@ -311,11 +314,11 @@ export function renderStepsView(ctx, { entry, analysis, stateKey, anchor = "" })
     doc,
     "div",
     { class: "doc-progress" },
-    h(doc, "div", { class: "doc-progress__top" }, h(doc, "span", { id: "steps-progress-label", text: t("steps.progress") }), progressValue),
+    h(doc, "div", { class: "doc-progress__top" }, h(doc, "span", { id: "steps-progress-label", text: t(`steps.progress.${category}`) }), progressValue),
     bar.element,
     progressDetail,
   );
-  const completion = h(doc, "div", { class: "completion", role: "status", hidden: true }, icon(doc, "party-popper", { className: "completion__icon" }), h(doc, "div", {}, h(doc, "p", { class: "completion__title", text: t("steps.completeTitle") }), h(doc, "p", { text: t("steps.completeBody") })));
+  const completion = h(doc, "div", { class: "completion", role: "status", hidden: true }, icon(doc, "party-popper", { className: "completion__icon" }), h(doc, "div", {}, h(doc, "p", { class: "completion__title", text: t(`steps.complete.${category}`) }), h(doc, "p", { text: t("steps.completeBody") })));
 
   function sync() {
     const progress = computeProgress(model, state.done);
@@ -377,7 +380,7 @@ export function renderStepsView(ctx, { entry, analysis, stateKey, anchor = "" })
   const stepper = h(
     doc,
     "nav",
-    { class: "stepper", "aria-label": t("steps.nav") },
+    { class: "stepper", "aria-label": t(`steps.nav.${category}`) },
     h(
       doc,
       "ol",
@@ -421,7 +424,7 @@ export function renderStepsView(ctx, { entry, analysis, stateKey, anchor = "" })
     element,
     focusAnchor(id) {
       if (stepOf(id)) {
-        goTo(stepOf(id), { focus: false });
+        goTo(stepOf(id));
         const sub = refs.substeps.get(id);
         if (sub && typeof sub.section.scrollIntoView === "function") sub.section.scrollIntoView({ block: "start" });
       }

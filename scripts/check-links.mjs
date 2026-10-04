@@ -11,7 +11,8 @@
  *  - assets/css/*.css (url(...));
  *  - los imports relativos de assets/js/*.js;
  *  - manifest.webmanifest (iconos) y documents.manifest.json (rutas);
- *  - los enlaces e imágenes relativos de cada documento y sus evidencias;
+ *  - los enlaces e imágenes relativos de cada documento (también los de las
+ *    opciones y explicaciones de las preguntas);
  *  - el sprite: cada icono del catálogo debe tener su <symbol>.
  * Los enlaces absolutos (http/https) no se comprueban: requieren red.
  */
@@ -87,13 +88,6 @@ export async function checkLinks({ root = ROOT, mode = DOCUMENTATION_MODE } = {}
     const dir = dirname(result.path);
     for (const link of renderer.collectLinks(result.body)) {
       if (isLocal(link.url)) await check(result.path, link.url, resolveRelativePath(dir, clean(link.url)));
-    }
-    if (result.type === "test" && result.model) {
-      for (const testCase of result.model.cases) {
-        for (const evidence of testCase.evidence) {
-          if (isLocal(evidence.target)) await check(`${result.path} (${testCase.id})`, evidence.target, resolveRelativePath(dir, clean(evidence.target)));
-        }
-      }
     }
   }
 
