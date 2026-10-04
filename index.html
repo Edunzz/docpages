@@ -1,0 +1,90 @@
+<!doctype html>
+<!--
+Desarrollado por Jose Eduardo Romero Jimenez
+https://github.com/Edunzz
+-->
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com; font-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>Documentación · Documentation</title>
+    <meta name="description" content="Procedimientos guiados y resultados de pruebas publicados desde Markdown con GitHub Pages.">
+    <meta name="theme-color" content="#3046c9" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)">
+    <link rel="icon" href="assets/icons/logo.svg" type="image/svg+xml">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="assets/js/theme-init.js"></script>
+    <script src="assets/vendor/prism.js" data-manual defer></script>
+    <script type="module" src="assets/js/main.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main" data-i18n="a11y.skip">Saltar al contenido</a>
+
+    <header class="topbar">
+      <div class="topbar__inner">
+        <a class="brand" href="#/">
+          <img class="brand__logo" src="assets/icons/logo.svg" alt="" width="28" height="28">
+          <span class="brand__title" id="brand-title">Documentación</span>
+        </a>
+        <a class="repo-chip" id="repo-chip" href="#/" hidden>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="assets/icons/sprite.svg#github"></use></svg>
+          <span id="repo-chip-text"></span>
+        </a>
+        <div class="topbar__actions">
+          <div class="lang-switch" role="group" aria-label="Idioma" data-i18n-label="lang.label">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="assets/icons/sprite.svg#languages"></use></svg>
+            <button type="button" class="lang-switch__option" data-lang="es" aria-pressed="true" lang="es"><span aria-hidden="true">ES</span><span class="sr-only">Español</span></button>
+            <button type="button" class="lang-switch__option" data-lang="en" aria-pressed="false" lang="en"><span aria-hidden="true">EN</span><span class="sr-only">English</span></button>
+          </div>
+          <button type="button" class="btn btn--icon" id="theme-toggle" aria-label="Cambiar a modo oscuro" title="Cambiar a modo oscuro">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="assets/icons/sprite.svg#moon"></use></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="main" tabindex="-1">
+      <div id="view" class="view" aria-busy="true">
+        <div class="loading" role="status">
+          <span class="loading__spinner" aria-hidden="true"></span>
+          <span data-i18n="app.loading">Cargando…</span>
+        </div>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="site-footer__inner">
+        <p class="site-footer__source" id="footer-source"></p>
+        <p class="site-footer__credit">
+          <span data-i18n="footer.credit">Desarrollado por</span>
+          <a href="https://github.com/Edunzz" target="_blank" rel="noopener noreferrer">Jose Eduardo Romero Jimenez</a>
+        </p>
+      </div>
+    </footer>
+
+    <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+    <dialog class="lightbox" id="lightbox" aria-labelledby="lightbox-caption">
+      <button type="button" class="btn btn--icon lightbox__close" id="lightbox-close" aria-label="Cerrar" data-i18n-label="lightbox.close">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="assets/icons/sprite.svg#x"></use></svg>
+      </button>
+      <figure class="lightbox__figure">
+        <img id="lightbox-img" alt="">
+        <figcaption id="lightbox-caption"></figcaption>
+      </figure>
+    </dialog>
+
+    <noscript>
+      <p class="noscript">
+        Este sitio necesita JavaScript para mostrar los documentos. Puedes leer los
+        archivos Markdown directamente en la carpeta <code>documents/</code> del repositorio.
+        <br>
+        This site needs JavaScript to display the documents. You can read the Markdown
+        files directly in the repository's <code>documents/</code> folder.
+      </p>
+    </noscript>
+  </body>
+</html>

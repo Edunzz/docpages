@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img" aria-labelledby="t">
+  <!--
+  Desarrollado por Jose Eduardo Romero Jimenez
+  https://github.com/Edunzz
+  Ilustración esquemática de la portada (no es una captura de pantalla).
+  -->
+  <title id="t">Ilustración de la portada: cabecera, buscador y tarjetas de procedimientos y pruebas</title>
+  <rect width="640" height="400" rx="14" fill="#f4f6fb"/>
+  <rect width="640" height="36" rx="14" fill="#ffffff"/>
+  <rect y="22" width="640" height="14" fill="#ffffff"/>
+  <circle cx="20" cy="18" r="5" fill="#f87171"/><circle cx="36" cy="18" r="5" fill="#fbbf24"/><circle cx="52" cy="18" r="5" fill="#34d399"/>
+  <rect x="80" y="10" width="300" height="16" rx="8" fill="#e5eaf3"/>
+  <rect x="24" y="52" width="592" height="110" rx="14" fill="#e8ecff"/>
+  <rect x="44" y="70" width="110" height="10" rx="5" fill="#3046c9"/>
+  <rect x="44" y="90" width="260" height="22" rx="6" fill="#0f172a"/>
+  <rect x="44" y="122" width="360" height="10" rx="5" fill="#94a3b8"/>
+  <rect x="44" y="140" width="120" height="14" rx="7" fill="#3046c9"/>
+  <rect x="24" y="178" width="400" height="30" rx="10" fill="#ffffff" stroke="#c3ccdc"/>
+  <rect x="440" y="178" width="176" height="30" rx="10" fill="#ffffff" stroke="#dde3ee"/>
+  <rect x="24" y="226" width="140" height="12" rx="6" fill="#0f172a"/>
+  <g>
+    <rect x="24" y="250" width="290" height="120" rx="14" fill="#ffffff" stroke="#dde3ee"/>
+    <rect x="24" y="250" width="5" height="120" fill="#3046c9"/>
+    <rect x="44" y="268" width="80" height="8" rx="4" fill="#94a3b8"/>
+    <rect x="44" y="286" width="220" height="14" rx="5" fill="#0f172a"/>
+    <rect x="44" y="310" width="240" height="8" rx="4" fill="#cbd5e1"/>
+    <rect x="44" y="338" width="160" height="8" rx="4" fill="#e5eaf3"/>
+    <rect x="44" y="338" width="96" height="8" rx="4" fill="#3046c9"/>
+  </g>
+  <g>
+    <rect x="326" y="250" width="290" height="120" rx="14" fill="#ffffff" stroke="#dde3ee"/>
+    <rect x="326" y="250" width="5" height="120" fill="#0d7f72"/>
+    <rect x="346" y="268" width="60" height="8" rx="4" fill="#94a3b8"/>
+    <rect x="346" y="286" width="200" height="14" rx="5" fill="#0f172a"/>
+    <rect x="346" y="310" width="230" height="8" rx="4" fill="#cbd5e1"/>
+    <rect x="346" y="332" width="84" height="20" rx="10" fill="#dcfce7"/>
+    <circle cx="360" cy="342" r="5" fill="#16a34a"/>
+    <rect x="370" y="338" width="50" height="8" rx="4" fill="#166534"/>
+  </g>
+</svg>

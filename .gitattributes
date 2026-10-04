@@ -1,0 +1,9 @@
+# Finales de línea LF en todas las plataformas: el hash de cada documento en
+# documents.manifest.json debe ser idéntico en Windows, macOS, Linux y el CI.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary

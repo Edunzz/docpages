@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "generator": {
+    "name": "docpages",
+    "author": "Jose Eduardo Romero Jimenez",
+    "authorUrl": "https://github.com/Edunzz",
+    "version": "1.0.0"
+  },
+  "generatedAt": "2026-10-04T04:18:38.530Z",
+  "source": "deployment",
+  "mode": "all",
+  "repository": null,
+  "counts": {
+    "steps": 1,
+    "tests": 1
+  },
+  "documents": [
+    {
+      "type": "steps",
+      "slug": "publish-github-pages",
+      "path": "documents/steps/example.steps.md",
+      "title": {
+        "es": "Publicar documentación en GitHub Pages",
+        "en": "Publish documentation with GitHub Pages"
+      },
+      "description": {
+        "es": "Procedimiento guiado para crear tu copia, validarla y publicarla con GitHub Pages.",
+        "en": "Guided procedure to create your copy, validate it and publish it with GitHub Pages."
+      },
+      "version": "1.0.0",
+      "author": "Jose Eduardo Romero Jimenez",
+      "updated": "2026-10-03",
+      "tags": [
+        "github-pages",
+        "documentation",
+        "getting-started"
+      ],
+      "reset": true,
+      "stepCount": 5,
+      "taskCount": 10,
+      "hash": "sha256-0064ef22ff12012c0215b135c4f668f6732a5b5d00f60bbc1d657156e234bda4",
+      "size": 6570,
+      "searchText": "Este procedimiento te lleva desde una copia del repositorio hasta un sitio publicado. Marca cada casilla o usa Marcar como completado : el avance se guarda solo en este navegador. ¿Cómo se calcula? Consulta el diagrama del flujo de progreso. This procedure takes you from a copy of the repository to a published site. Tick each box or use Mark as complete : progress is saved only in this browser. How is it calculated? See the progress flow diagram in Spanish . prepare Preparar el repositorio Prepare the repository Crea tu copia con Use this template o con un fork . No hace falta editar nombres ni enlaces: al publicarse, el sitio detecta el propietario y el nombre del repositorio. Create your copy with Use this template or a fork. There is no need to edit names or links: once published, the site detects the repository owner and name. prepare branch Verificar la rama Verify the branch Abre el repositorio en GitHub. Confirma que existe la rama main . Open the repository on GitHub. Confirm that the main branch exists. prepare files Verificar los archivos Verify the files Existe index.html en la raíz. Existen las carpetas documents/steps y documents/tests . index.html exists at the root. The documents/steps and documents/tests folders exist. validate Validar en local Validate locally Instala las dependencias y ejecuta las comprobaciones. Necesitas Node.js 22 o superior. Install the dependencies and run the checks. You need Node.js 22 or later. bash npm ci npm run validate npm test !TIP npm run preview construye el sitio en site/ y lo sirve bajo /docpages/ , igual que un sitio de proyecto de GitHub Pages. npm run validate termina sin errores. npm test pasa todas las pruebas. !TIP npm run preview builds the site into site/ and serves it under /docpages/ , just like a GitHub Pages project site. npm run validate finishes without errors. npm test passes every test. enable pages Habilitar GitHub Pages Enable GitHub Pages En Settings → Pages elige GitHub Actions como origen de la publicación. Puedes abrir la página directamente: configuración de Pages. Opción Valor Source GitHub Actions Workflow .github/workflows/pages.yml Rama que despliega main El origen de Pages es GitHub Actions . In Settings → Pages choose GitHub Actions as the publishing source. You can open the page directly: Pages settings. Option Value Source GitHub Actions Workflow .github/workflows/pages.yml Deploying branch main The Pages source is GitHub Actions . publish Publicar Publish Haz push a main . El workflow valida los documentos, genera documents.manifest.json con los datos de tu repositorio y despliega. !NOTE El despliegue puede tardar unos minutos. La URL aparece en la pestaña Actions , en el job deploy . Push to main . The workflow validates the documents, generates documents.manifest.json with your repository data and deploys. !NOTE Deployment can take a few minutes. The URL appears in the Actions tab, in the deploy job. bash git add . git commit m \"docs: primera publicación\" git push origin main first document Crear tu primer documento Create your first document create file Crear el archivo Create the file Crea documents/steps/mi procedimiento.steps.md . El sufijo decide el tipo y debe coincidir con type : Create documents/steps/my procedure.steps.md . The suffix decides the type and must match type : markdown title: { es: \"Mi procedimiento\", en: \"My procedure\" } description: { es: \"Qué logra el lector.\", en: \"What the reader achieves.\" } slug: \"mi procedimiento\" type: \"steps\" version: \"1.0.0\" updated: \"2026 10 03\" uno Primer paso First step Una tarea comprobable. review Revisar y publicar Review and publish Ejecuta npm run validate , corrige lo que indique y haz push . El documento aparecerá en la portada. !WARNING Si cambias el contenido de forma significativa, sube version : el progreso guardado de la versión anterior no se mezcla con el nuevo. Run npm run validate , fix whatever it reports and push. The document will appear on the home page. !WARNING If you change the content significantly, bump version : saved progress from the previous version does not mix with the new one. ¿Algo no funciona? Revisa la sección «Solución de problemas» del README o la validación de ejemplo. Something not working? Check the “Troubleshooting” section of the README or the example validation."
+    },
+    {
+      "type": "test",
+      "slug": "site-validation",
+      "path": "documents/tests/example.test.md",
+      "title": {
+        "es": "Validación del sitio de documentación",
+        "en": "Documentation site validation"
+      },
+      "description": {
+        "es": "Comprueba la generación del manifiesto, la portada, el cambio de idioma, el progreso y la publicación en GitHub Pages.",
+        "en": "Checks manifest generation, the home page, language switching, progress and publishing on GitHub Pages."
+      },
+      "version": "1.0.0",
+      "author": "Jose Eduardo Romero Jimenez",
+      "updated": "2026-10-03",
+      "tags": [
+        "test",
+        "github-pages",
+        "accessibility"
+      ],
+      "reset": true,
+      "status": "partial",
+      "executedAt": "2026-10-03T23:30:00-05:00",
+      "environment": {
+        "es": "Local: Node.js 24 + jsdom (npm test)",
+        "en": "Local: Node.js 24 + jsdom (npm test)"
+      },
+      "summary": {
+        "passed": 4,
+        "failed": 0,
+        "blocked": 0,
+        "partial": 0,
+        "running": 0,
+        "not-run": 1,
+        "total": 5
+      },
+      "hash": "sha256-f6c1d13b7cee58921d9bdc0cd3c2f724119889dd191d1391ac5ca40d2b9e1cb0",
+      "size": 5348,
+      "searchText": "Objetivo Objective Validar que el sitio se construye, que la documentación es navegable y accesible, y que el estado local se comporta como se espera. La publicación en GitHub Pages queda pendiente hasta el primer despliegue. Validate that the site builds, that the documentation is navigable and accessible, and that local state behaves as expected. Publishing on GitHub Pages stays pending until the first deployment. Precondiciones Preconditions Dependencias instaladas con npm ci . Documentos válidos según npm run validate . Dependencies installed with npm ci . Documents valid according to npm run validate . manifest build Genera el manifiesto Builds the manifest passed Esperado: npm run manifest lista un procedimiento y una prueba, ordenados y con su hash. Obtenido: se generó documents.manifest.json con ambos documentos. Expected: npm run manifest lists one procedure and one test, sorted and hashed. Actual: documents.manifest.json was generated with both documents. link Abrir el manifiesto Open the manifest ../../documents.manifest.json home loads Carga la portada y lista los documentos Home page loads and lists documents passed Esperado: la portada separa Procedimientos y Pruebas, busca por título, etiqueta y contenido, y no tiene infracciones de accesibilidad de axe core. Obtenido: la prueba tests/app.test.mjs renderizó la portada en jsdom sin infracciones. Expected: the home page separates Procedures and Tests, searches by title, tag and content, and has no axe core accessibility violations. Actual: tests/app.test.mjs rendered the home page in jsdom with no violations. image Ilustración de la portada no es una captura Home page illustration not a screenshot evidence/home overview.svg language switch Cambia entre español e inglés Switches between Spanish and English passed Esperado: el selector cambia toda la interfaz, actualiza <html lang y recuerda la preferencia. Obtenido: la interfaz y los bloques :::lang cambiaron y la preferencia quedó en localStorage . Expected: the selector switches the whole interface, updates <html lang and remembers the preference. Actual: the interface and the :::lang blocks switched and the preference was stored in localStorage . progress persistence Persiste y reinicia el progreso Persists and resets progress passed Esperado: marcar pasos, subpasos y casillas actualiza el porcentaje, sobrevive a una recarga y «Reiniciar» lo borra. Obtenido: el porcentaje, la persistencia por versión y el reinicio se comportaron como se esperaba. Expected: marking steps, substeps and checkboxes updates the percentage, survives a reload, and “Reset” clears it. Actual: the percentage, per version persistence and reset behaved as expected. pages deploy Publica en GitHub Pages Publishes on GitHub Pages not run Esperado: el workflow despliega y el sitio muestra el propietario y el repositorio reales. Obtenido: pendiente; se ejecuta tras el primer push a main . Expected: the workflow deploys and the site shows the real owner and repository. Actual: pending; it runs after the first push to main . link Abrir el sitio publicado Open the published site Conclusión Conclusion La validación local es satisfactoria. Falta confirmar la publicación en GitHub Pages; cuando ocurra, actualiza status , summary y el caso pages deploy . Local validation is successful. Publishing on GitHub Pages still needs confirmation; when it happens, update status , summary and the pages deploy case."
+    }
+  ]
+}

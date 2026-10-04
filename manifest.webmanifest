@@ -1,0 +1,19 @@
+{
+  "name": "DocPages",
+  "short_name": "DocPages",
+  "description": "Procedimientos guiados y resultados de pruebas publicados desde Markdown.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#3046c9",
+  "icons": [
+    {
+      "src": "assets/icons/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

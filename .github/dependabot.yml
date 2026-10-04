@@ -1,0 +1,23 @@
+# Desarrollado por Jose Eduardo Romero Jimenez
+# https://github.com/Edunzz
+#
+# Actualizaciones semanales de dependencias npm y de GitHub Actions.
+# Tras actualizar una librería del navegador, ejecuta «npm run vendor» y
+# versiona assets/vendor si publicas desde una rama sin Actions.
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      navegador:
+        patterns: ["markdown-it", "js-yaml", "dompurify", "prismjs", "lucide-static", "@primer/octicons"]
+      pruebas:
+        patterns: ["jsdom", "axe-core", "ajv"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Desarrollado por Jose Eduardo Romero Jimenez - https://github.com/Edunzz",
+  "title": "Front matter de {titulo}.steps.md",
+  "description": "Procedimiento con pasos (:::step), subpasos (:::substep) y casillas (- [ ]).",
+  "type": "object",
+  "required": [
+    "title",
+    "description",
+    "slug",
+    "type",
+    "version",
+    "updated"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "$ref": "#/$defs/localizedText"
+    },
+    "description": {
+      "$ref": "#/$defs/localizedText"
+    },
+    "slug": {
+      "$ref": "#/$defs/slug"
+    },
+    "type": {
+      "const": "steps"
+    },
+    "version": {
+      "$ref": "#/$defs/version"
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "updated": {
+      "$ref": "#/$defs/date"
+    },
+    "tags": {
+      "$ref": "#/$defs/tags"
+    },
+    "links": {
+      "$ref": "#/$defs/links"
+    },
+    "reset": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "$defs": {
+    "localizedText": {
+      "description": "texto simple o un objeto { es, en } con al menos un idioma",
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "es": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "en": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          }
+        }
+      ]
+    },
+    "slug": {
+      "type": "string",
+      "maxLength": 80,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "minúsculas, números y guiones (kebab-case), estable y apto para URL"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$",
+      "description": "versión semántica MAYOR.MENOR.PARCHE, p. ej. 1.0.0"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "maxLength": 40,
+        "pattern": "^[a-z0-9][a-z0-9-]*$",
+        "description": "etiquetas en minúsculas con guiones"
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": [
+        "label",
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/localizedText"
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^(?:https?://\\S+|mailto:\\S+|\\{\\{\\s*[a-z_]+\\s*\\}\\}\\S*|#\\S*|\\.{1,2}/\\S*|[A-Za-z0-9_][^:\\s]*)$",
+          "description": "http(s), mailto, un token como {{repo_url}} o una ruta relativa"
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "nombre de icono, p. ej. github o external-link"
+        },
+        "highlight": {
+          "type": "boolean"
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "$ref": "#/$defs/link"
+      }
+    }
+  }
+}
