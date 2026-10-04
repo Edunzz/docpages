@@ -100,7 +100,12 @@ export function documentStateKey({ prefix = DEFAULT_PREFIX, repository = null, s
   return [prefix, repositoryScope(repository), slug, version || "0.0.0", type].join(":");
 }
 
-/** Clave del manifiesto cargado en vivo desde GitHub (sessionStorage). */
-export function liveManifestKey({ prefix = DEFAULT_PREFIX, repository = null } = {}) {
-  return [prefix, repositoryScope(repository), "live-manifest"].join(":");
+/** Clave de la lista de documentos guardada (localStorage, 10 minutos). */
+export function catalogCacheKey({ prefix = DEFAULT_PREFIX, repository = null } = {}) {
+  return [prefix, repositoryScope(repository), "catalog"].join(":");
+}
+
+/** Clave del borrador de la pestaña «Validar» (archivos abiertos). */
+export function validatorDraftKey({ prefix = DEFAULT_PREFIX } = {}) {
+  return [prefix, "validator"].join(":");
 }

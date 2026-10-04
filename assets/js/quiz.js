@@ -28,7 +28,7 @@
 
 import { groupLanguageBlocks, pickLanguageVariant, markdownOf, localizedAttribute, ID_RE } from "./markdown.js";
 import { QUESTION_TYPE_ICONS } from "./icons.js";
-import { h, icon, progressBar, enhanceContent, renderDocHeader, hydrateTaskMarkers } from "./ui.js";
+import { h, icon, setIcon, progressBar, enhanceContent, renderDocHeader, hydrateTaskMarkers, prefersReducedMotion } from "./ui.js";
 
 export const QUESTION_TYPES = Object.freeze(["single", "multiple", "true-false", "text", "number", "order", "match"]);
 export const FEEDBACK_MODES = Object.freeze(["immediate", "end"]);
@@ -697,6 +697,7 @@ export function renderQuizView(ctx, { entry, analysis, stateKey }) {
       const ok = checked && isCorrect(q, value);
       view.sync(value, checked);
       section.dataset.result = checked ? (ok ? "correct" : "incorrect") : isAnswered(q, value) ? "answered" : "";
+      syncNav(q);
       if (checkButton) checkButton.hidden = checked;
       if (retryButton) retryButton.hidden = !checked || state.finished;
       if (explanation) explanation.hidden = !checked;
@@ -740,6 +741,7 @@ export function renderQuizView(ctx, { entry, analysis, stateKey }) {
     const view = views.get(q.id);
     view.notice.hidden = true;
     view.section.dataset.result = isAnswered(q, state.answers[q.id]) ? "answered" : "";
+    syncNav(q);
     syncSummary();
   }
 
@@ -874,7 +876,12 @@ export function renderQuizView(ctx, { entry, analysis, stateKey }) {
       result.wrong.length
         ? h(doc, "div", { class: "quiz-results__review" }, h(doc, "p", { text: t("quiz.review") }), h(doc, "ul", {}, result.wrong.map((id) => {
             const q = model.questions.find((item) => item.id === id);
-            return h(doc, "li", {}, h(doc, "a", { href: ctx.routeFor(entry, id), text: t("quiz.questionN", { n: q.index + 1, total }) }));
+            const link = h(doc, "a", { href: ctx.routeFor(entry, id), text: t("quiz.questionN", { n: q.index + 1, total }) });
+            link.addEventListener("click", (event) => {
+              event.preventDefault();
+              goToQuestion(id);
+            });
+            return h(doc, "li", {}, link);
           })))
         : h(doc, "p", { class: "quiz-results__perfect" }, icon(doc, "party-popper"), h(doc, "span", { text: t("quiz.allCorrect") })),
     );
@@ -886,6 +893,58 @@ export function renderQuizView(ctx, { entry, analysis, stateKey }) {
     ctx.announce(t("quiz.announceResult", { percent: ctx.formatPercent(result.percent), verdict: t(result.passed ? "quiz.passed" : "quiz.failed") }));
     if (typeof results.scrollIntoView === "function") results.scrollIntoView({ block: "start" });
     resultsTitle.focus({ preventScroll: true });
+  }
+
+  // ── Navegador de preguntas (columna lateral, como los pasos) ──────────────
+  const navLinks = new Map();
+  const nav = h(
+    doc,
+    "nav",
+    { class: "quiz-nav", "aria-label": t("quiz.nav") },
+    h(
+      doc,
+      "ol",
+      { class: "quiz-nav__list" },
+      model.questions.map((q) => {
+        const state = h(doc, "span", { class: "quiz-nav__state" });
+        const marker = h(doc, "span", { class: "quiz-nav__marker", "aria-hidden": "true" }, h(doc, "span", { class: "quiz-nav__number", text: String(q.index + 1) }), icon(doc, "check", { className: "quiz-nav__icon" }));
+        const link = h(
+          doc,
+          "a",
+          { class: "quiz-nav__link", href: ctx.routeFor(entry, q.id), dataset: { id: q.id } },
+          marker,
+          h(doc, "span", { class: "quiz-nav__text" }, h(doc, "span", { class: "quiz-nav__title", text: t("quiz.questionShort", { n: q.index + 1 }) }), h(doc, "span", { class: "quiz-nav__meta" }, h(doc, "span", { text: t(`quiz.type.${q.type}`) }), state)),
+        );
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          goToQuestion(q.id);
+        });
+        navLinks.set(q.id, { link, state, marker });
+        return h(doc, "li", { class: "quiz-nav__item" }, link);
+      }),
+    ),
+  );
+
+  function syncNav(q) {
+    const item = navLinks.get(q.id);
+    if (!item) return;
+    const value = state.answers[q.id];
+    const status = isChecked(q.id) ? (isCorrect(q, value) ? "correct" : "incorrect") : isAnswered(q, value) ? "answered" : "pending";
+    item.link.dataset.state = status;
+    item.state.textContent = ` · ${t(`quiz.state.${status}`)}`;
+    setIcon(item.marker.querySelector("svg"), status === "incorrect" ? "x" : "check");
+  }
+
+  function goToQuestion(id, { updateUrl = true } = {}) {
+    const view = views.get(id);
+    if (!view) return;
+    if (typeof view.section.scrollIntoView === "function") view.section.scrollIntoView({ behavior: prefersReducedMotion(ctx.win) ? "auto" : "smooth", block: "start" });
+    view.title.focus({ preventScroll: true });
+    for (const [other, item] of navLinks) {
+      if (other === id) item.link.setAttribute("aria-current", "true");
+      else item.link.removeAttribute("aria-current");
+    }
+    if (updateUrl && !ctx.preview && ctx.win.history && typeof ctx.win.history.replaceState === "function") ctx.win.history.replaceState(null, "", ctx.routeFor(entry, id));
   }
 
   function syncAll() {
@@ -931,16 +990,13 @@ export function renderQuizView(ctx, { entry, analysis, stateKey }) {
     ["eye", t("quiz.feedback"), t(endFeedback ? "quiz.feedback.end" : "quiz.feedback.immediate")],
   ];
   const header = renderDocHeader(ctx, { entry, meta, extraMeta, aside: scorePanel, onReset: meta.reset === false ? null : reset });
-  const element = h(doc, "article", { class: "doc doc--quiz", "aria-labelledby": "doc-title" }, header, content, finishBar, results);
+  const element = h(doc, "article", { class: "doc doc--quiz", "aria-labelledby": "doc-title" }, header, h(doc, "div", { class: "quiz-layout" }, nav, h(doc, "div", { class: "quiz-main" }, content, finishBar, results)));
   syncAll();
 
   return {
     element,
     focusAnchor(id) {
-      const view = views.get(id);
-      if (!view) return;
-      if (typeof view.section.scrollIntoView === "function") view.section.scrollIntoView({ block: "start" });
-      view.title.focus({ preventScroll: true });
+      goToQuestion(id, { updateUrl: false });
     },
     destroy() {},
     /** Solo para pruebas. */

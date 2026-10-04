@@ -10,11 +10,11 @@
  *   #/?type={categoría}         portada filtrada: procedure | lab-guide | practice-test
  *   #/steps/{slug}[/{paso}]     procedimiento o guía de laboratorio
  *   #/tests/{slug}[/{pregunta}] prueba de práctica
+ *   #/validate                  pestaña «Validar»: revisar un documento antes de subirlo
  *
- * Fuente de datos: `documents.manifest.json` (generado en el despliegue). Con
- * «Actualizar desde el repositorio público» se reemplaza durante la sesión
- * por uno leído en vivo de la API pública de GitHub; si falla se conserva el
- * del despliegue.
+ * No hay paso de compilación ni manifiesto: la lista de documentos se
+ * descubre al cargar (ver catalog.js). En GitHub Pages sale del repositorio
+ * público; en local, de la carpeta `documents/` que sirve tu servidor.
  *
  * `startApp()` no toca globales: recibe la ventana y las librerías, así que
  * también corre en jsdom para las pruebas de accesibilidad.
@@ -22,26 +22,14 @@
 
 import { CONFIG, DOCUMENTATION_MODE } from "./config.js";
 import { createI18n } from "./i18n.js";
-import { createStore, browserStorage, documentStateKey, liveManifestKey } from "./storage.js";
-import { resolveRepository, repositoryTokens, refreshFromGitHub } from "./github.js";
+import { createStore, browserStorage, documentStateKey, catalogCacheKey, validatorDraftKey } from "./storage.js";
+import { resolveRepository, repositoryTokens, parsePagesLocation, parseGitConfig, isValidRepository } from "./github.js";
 import { createMarkdownRenderer, prismHighlighter, expandTokens, dirname } from "./markdown.js";
-import {
-  analyzeDocument,
-  buildManifestEntry,
-  invalidEntry,
-  findDuplicateSlugs,
-  isCandidatePath,
-  enabledTypes,
-  enabledCategories,
-  categoryOf,
-  normalizeCategory,
-  normalizeMode,
-  filterByMode,
-  typeFromRoute,
-  routeFor,
-} from "./documents.js";
+import { analyzeDocument, isCandidatePath, enabledTypes, enabledCategories, categoryOf, normalizeCategory, normalizeMode, filterByMode, typeFromRoute, routeFor } from "./documents.js";
+import { buildCatalog } from "./catalog.js";
 import { renderStepsView } from "./steps.js";
 import { renderQuizView } from "./quiz.js";
+import { renderValidatorView } from "./validator.js";
 import { CATEGORY_ICONS } from "./icons.js";
 import { h, icon, setIcon, progressBar, markExternal } from "./ui.js";
 
@@ -65,6 +53,7 @@ export function parseRoute(hash) {
       }
     });
   if (!segments.length) return { name: "home", params };
+  if (segments[0] === "validate" && segments.length === 1) return { name: "validate", params };
   const type = typeFromRoute(segments[0]);
   if (type && segments[1]) return { name: "doc", type, slug: segments[1], anchor: segments[2] || "", params };
   return { name: "not-found", params };
@@ -83,26 +72,13 @@ export function normalizeText(value) {
 const localizedValues = (value) => (value && typeof value === "object" ? Object.values(value) : [value]);
 
 export function searchIndexText(entry) {
-  return normalizeText(
-    [...localizedValues(entry.title), ...localizedValues(entry.description), ...(entry.tags || []), entry.slug, entry.author, entry.searchText].filter(Boolean).join(" "),
-  );
+  return normalizeText([...localizedValues(entry.title), ...localizedValues(entry.description), ...(entry.tags || []), entry.slug, entry.author, entry.searchText].filter(Boolean).join(" "));
 }
 
 /** ¿El documento contiene todos los términos de la búsqueda? */
 export function matchesQuery(entry, query, index = searchIndexText(entry)) {
   const terms = normalizeText(query).split(" ").filter(Boolean);
   return terms.every((term) => index.includes(term));
-}
-
-async function sha256(win, text) {
-  try {
-    const subtle = win.crypto && win.crypto.subtle;
-    if (!subtle) return "";
-    const digest = await subtle.digest("SHA-256", new TextEncoder().encode(text));
-    return "sha256-" + [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  } catch {
-    return "";
-  }
 }
 
 /**
@@ -114,7 +90,6 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
   const activeMode = normalizeMode(mode);
   const fetcher = fetchImpl || (typeof win.fetch === "function" ? win.fetch.bind(win) : null);
   const store = createStore(browserStorage(win, "localStorage"));
-  const session = createStore(browserStorage(win, "sessionStorage"));
   const nav = win.navigator || {};
   const i18n = createI18n({
     storage: store,
@@ -131,6 +106,7 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     brandTitle: byId("brand-title"),
     repoChip: byId("repo-chip"),
     repoChipText: byId("repo-chip-text"),
+    navValidate: byId("nav-validate"),
     themeToggle: byId("theme-toggle"),
     footerSource: byId("footer-source"),
     lightbox: byId("lightbox"),
@@ -138,10 +114,10 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     lightboxCaption: byId("lightbox-caption"),
     lightboxClose: byId("lightbox-close"),
   };
-  const app = { deployed: null, manifest: null, repo: null, schemas: null, view: null, renderToken: 0, docCache: new Map(), notice: null, query: "", homeCategory: "all", started: false };
+  const app = { catalog: null, source: "local", repo: null, schemas: null, view: null, renderToken: 0, docCache: new Map(), notice: null, query: "", homeCategory: "all", started: false };
   const siteTitle = () => i18n.localize(config.siteTitle);
-  const liveKey = () => liveManifestKey({ prefix: config.storagePrefix, repository: app.repo });
   const formatPercent = (value) => new Intl.NumberFormat(i18n.lang, { style: "percent", maximumFractionDigits: 0 }).format(value / 100);
+  const documents = () => (app.catalog ? app.catalog.documents : []);
 
   // ── Utilidades de interfaz ────────────────────────────────────────────────
   function announce(message) {
@@ -190,8 +166,7 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     }
     const link = h(doc, "a", { href: app.repo.url, text: app.repo.fullName });
     markExternal(doc, t, link);
-    const sha = app.manifest && app.manifest.source !== "github" && app.manifest.repository && app.manifest.repository.sha;
-    els.footerSource.append(`${t("footer.source")} `, link, sha ? ` · ${t("repo.commit", { sha: String(sha).slice(0, 7) })}` : "");
+    els.footerSource.append(`${app.source === "github" ? t("footer.source") : t("footer.localOf")} `, link);
   }
 
   function translateStatic() {
@@ -235,17 +210,45 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     return response.json();
   }
 
-  function documentUrl(entry) {
-    return entry.rawUrl || new URL(entry.path, doc.baseURI).href;
+  const analyze = (path, text) => analyzeDocument({ path, source: text, yaml: libs.yaml, schemas: app.schemas, renderer, languages: config.languages });
+
+  /** En local, el remoto de `.git/config` (si el servidor lo sirve) da los enlaces al repositorio. */
+  async function readGitRepository() {
+    try {
+      const response = await fetcher(new URL(".git/config", doc.baseURI).href, { cache: "no-store" });
+      if (!response.ok) return null;
+      return parseGitConfig(await response.text());
+    } catch {
+      return null;
+    }
+  }
+
+  async function loadCatalog({ refresh = false } = {}) {
+    app.catalog = await buildCatalog({
+      source: app.source,
+      repository: app.repo,
+      baseUrl: doc.baseURI,
+      fetchImpl: fetcher,
+      store,
+      cacheKey: catalogCacheKey({ prefix: config.storagePrefix, repository: app.repo }),
+      isCandidate: (path) => isCandidatePath(path, activeMode),
+      analyze,
+      api: config.github.api,
+      raw: config.github.raw,
+      timeoutMs: config.github.timeoutMs,
+      maxDocuments: config.github.maxDocuments,
+      refresh,
+    });
+    app.docCache = app.catalog.texts;
+    return app.catalog;
   }
 
   async function fetchDocument(entry) {
-    const url = entry.rawUrl ? entry.rawUrl : `${documentUrl(entry)}?v=${String(entry.hash || "").replace(/^sha256-/, "").slice(0, 12)}`;
-    if (app.docCache.has(url)) return app.docCache.get(url);
-    const response = await fetcher(url, { cache: "no-cache" });
+    if (app.docCache.has(entry.path)) return app.docCache.get(entry.path);
+    const response = await fetcher(new URL(entry.path, doc.baseURI).href, { cache: "no-cache" });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${entry.path}`);
     const text = await response.text();
-    app.docCache.set(url, text);
+    app.docCache.set(entry.path, text);
     return text;
   }
 
@@ -256,9 +259,19 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     return saved && saved.summary && typeof saved.summary.percent === "number" ? saved : null;
   }
 
-  const analyze = (path, text) => analyzeDocument({ path, source: text, yaml: libs.yaml, schemas: app.schemas, renderer, languages: config.languages });
-
   // ── Vistas ────────────────────────────────────────────────────────────────
+  function documentTokens(meta) {
+    return {
+      ...repositoryTokens(app.repo),
+      title: i18n.localize(meta.title),
+      description: i18n.localize(meta.description),
+      version: String(meta.version),
+      author: meta.author || "",
+      updated: meta.updated,
+      slug: meta.slug,
+    };
+  }
+
   function viewContext({ entry, tokens, docBaseUrl, docDir }) {
     return {
       doc,
@@ -276,14 +289,36 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
       docBaseUrl,
       docDir,
       routeFor,
+      preview: false,
       documentRoute: (path) => {
-        const target = app.manifest.documents.find((d) => d.path === path);
+        const target = documents().find((d) => d.path === path && !d.invalid);
         return target && enabledTypes(activeMode).includes(target.type) ? routeFor(target) : null;
       },
       renderMarkdown: (text) => renderer.renderFragment(expandTokens(text, tokens)),
       renderInline: (text) => renderer.renderInlineFragment(expandTokens(text, tokens)),
       openLightbox,
     };
+  }
+
+  /** Vista previa para «Validar»: la vista real, con estado solo en memoria y sin tocar la URL. */
+  function previewView(analysis, path) {
+    const meta = analysis.meta;
+    const entry = { type: analysis.type, category: analysis.category, slug: meta.slug, path, version: String(meta.version) };
+    const ctx = viewContext({ entry, tokens: documentTokens(meta), docBaseUrl: new URL(path, doc.baseURI).href, docDir: dirname(path) });
+    ctx.store = createStore(null);
+    ctx.preview = true;
+    ctx.routeFor = () => "#/validate";
+    const view = analysis.type === "steps" ? renderStepsView(ctx, { entry, analysis, stateKey: "preview" }) : renderQuizView(ctx, { entry, analysis, stateKey: "preview" });
+    // La página ya tiene su h1: el título del documento pasa a h2.
+    const title = view.element.querySelector("h1");
+    if (title) {
+      const heading = doc.createElement("h2");
+      for (const attr of [...title.attributes]) heading.setAttribute(attr.name, attr.value);
+      heading.classList.add("doc-title--preview");
+      heading.append(...title.childNodes);
+      title.replaceWith(heading);
+    }
+    return { element: h(doc, "div", { class: "preview-frame" }, view.element), destroy: () => view.destroy() };
   }
 
   function messageView({ title, body = "", hint = "", details = [], iconName = "triangle-alert", retry = false }) {
@@ -306,12 +341,6 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     );
   }
 
-  function noticeView() {
-    if (!app.notice) return null;
-    const iconName = app.notice.kind === "success" ? "circle-check" : app.notice.kind === "warning" ? "triangle-alert" : "circle-x";
-    return h(doc, "div", { class: ["notice", `notice--${app.notice.kind}`], role: app.notice.kind === "error" ? "alert" : "status" }, icon(doc, iconName), h(doc, "div", {}, app.notice.messages.map((m) => h(doc, "p", { text: m }))));
-  }
-
   function errorMessage(error) {
     if (error.code === "rate-limited") {
       const reset = error.resetAt ? t("error.rate-limited-reset", { time: i18n.formatTime(error.resetAt) }) : "";
@@ -321,96 +350,67 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     return t(`error.${error.code}`);
   }
 
-  async function refresh(button) {
-    if (!app.repo) {
-      app.notice = { kind: "error", messages: [t("error.no-repo")] };
-      return render({ keepFocus: true });
+  /** Avisos sobre de dónde salió la lista de documentos. */
+  function catalogNotices() {
+    const catalog = app.catalog;
+    if (!catalog) return [];
+    const notices = [];
+    if (catalog.source === "local" && !catalog.listing) notices.push({ kind: "error", messages: [t("catalog.noListing"), t("catalog.noListingHint")] });
+    if (catalog.error) {
+      const when = catalog.listedAt ? i18n.formatTime(new Date(catalog.listedAt)) : "";
+      notices.push({ kind: catalog.stale ? "warning" : "error", messages: [errorMessage(catalog.error), catalog.stale ? t("catalog.stale", { time: when }) : t("catalog.validateStill")] });
     }
+    if (catalog.truncated) notices.push({ kind: "warning", messages: [t("catalog.truncated")] });
+    if (app.notice) notices.push(app.notice);
+    return notices;
+  }
+
+  function noticeView(notice) {
+    const iconName = notice.kind === "success" ? "circle-check" : notice.kind === "warning" ? "triangle-alert" : "circle-x";
+    return h(doc, "div", { class: ["notice", `notice--${notice.kind}`], role: notice.kind === "error" ? "alert" : "status" }, icon(doc, iconName), h(doc, "div", {}, notice.messages.map((m) => h(doc, "p", { text: m }))));
+  }
+
+  async function refresh(button) {
     button.disabled = true;
     button.setAttribute("aria-busy", "true");
     button.querySelector("span").textContent = t("repo.refreshing");
     announce(t("repo.refreshing"));
-
-    const result = await refreshFromGitHub({
-      deployed: app.deployed,
-      repository: { owner: app.repo.owner, name: app.repo.name, branch: app.repo.branch },
-      fetchImpl: fetcher,
-      api: config.github.api,
-      raw: config.github.raw,
-      maxDocuments: config.github.maxDocuments,
-      timeoutMs: config.github.timeoutMs,
-      isDocumentPath: (path) => isCandidatePath(path, activeMode),
-      // Un documento con errores no se descarta: la portada lo muestra con sus errores.
-      analyze: async ({ path, text, rawUrl }) => {
-        const analysis = analyze(path, text);
-        if (analysis.errors.length) return invalidEntry(analysis, { rawUrl });
-        return buildManifestEntry(analysis, { hash: await sha256(win, text), size: text.length, rawUrl });
-      },
-    });
-
-    if (result.ok) {
-      const documents = result.manifest.documents;
-      for (const duplicate of findDuplicateSlugs(documents.filter((d) => !d.invalid).map((d) => ({ path: d.path, meta: { slug: d.slug } })))) {
-        for (const path of duplicate.paths) {
-          const index = documents.findIndex((d) => d.path === path);
-          documents[index] = invalidEntry({ ...documents[index], errors: [{ line: null, message: duplicate.message }] }, { rawUrl: documents[index].rawUrl });
-        }
-      }
-      app.manifest = result.manifest;
-      app.docCache.clear();
-      session.setJSON(liveKey(), result.manifest);
-      const invalid = documents.filter((d) => d.invalid).length;
-      const skipped = (result.skipped || []).length;
-      const messages = [t("repo.refreshed", { count: documents.length - invalid, repo: app.repo.fullName })];
-      if (invalid) messages.push(t("repo.invalid", { count: invalid }));
-      if (skipped) messages.push(t("repo.skipped", { count: skipped }));
-      if (result.truncated) messages.push(t("repo.truncated"));
-      app.notice = { kind: invalid || skipped ? "error" : result.truncated ? "warning" : "success", messages };
-      if (skipped && win.console) win.console.warn("[docpages] Documentos que no se pudieron leer:", result.skipped);
-    } else {
-      app.notice = { kind: "error", messages: [errorMessage(result.error)] };
-    }
-    announce(app.notice.messages.join(" "));
-    paintFooter();
-    return render({ keepFocus: true });
-  }
-
-  function useDeployed() {
-    session.remove(liveKey());
-    app.manifest = app.deployed;
-    app.docCache.clear();
     app.notice = null;
-    paintFooter();
+    const catalog = await loadCatalog({ refresh: true });
+    if (!catalog.error && catalog.listing) {
+      const valid = catalog.documents.filter((d) => !d.invalid).length;
+      app.notice = { kind: "success", messages: [t("catalog.refreshed", { count: valid })] };
+      announce(app.notice.messages[0]);
+    } else {
+      announce(catalogNotices().flatMap((n) => n.messages).join(" "));
+    }
     return render({ keepFocus: true });
   }
 
   function renderHome(params) {
-    const visible = filterByMode(app.manifest.documents, activeMode);
-    const documents = visible.filter((d) => !d.invalid);
+    const visible = filterByMode(documents(), activeMode);
+    const docs = visible.filter((d) => !d.invalid);
     const invalid = visible.filter((d) => d.invalid);
     const categories = enabledCategories(activeMode);
     const requested = normalizeCategory(params.type);
     if (requested && categories.includes(requested)) app.homeCategory = requested;
     if (app.homeCategory !== "all" && !categories.includes(app.homeCategory)) app.homeCategory = "all";
-    const live = app.manifest.source === "github";
+    const fromGitHub = app.source === "github";
 
-    // Hero con origen del contenido.
-    const sourceBits = [];
-    const repoInfo = app.manifest.repository || {};
-    if (repoInfo.branch) sourceBits.push(t("repo.branch", { branch: repoInfo.branch }));
-    if (!live && repoInfo.sha) sourceBits.push(t("repo.commit", { sha: String(repoInfo.sha).slice(0, 7) }));
-    if (app.manifest.generatedAt) sourceBits.push(t("repo.generated", { date: i18n.formatDateTime(app.manifest.generatedAt) }));
-
-    const repoActions = [];
+    // Hero con el origen del contenido.
+    const actions = [];
     if (app.repo) {
       const view = h(doc, "a", { class: "btn btn--primary", href: app.repo.url }, icon(doc, "github"), h(doc, "span", { text: t("repo.view") }));
       markExternal(doc, t, view);
-      repoActions.push(view);
-      const refreshButton = h(doc, "button", { type: "button", class: "btn btn--ghost" }, icon(doc, "refresh-cw"), h(doc, "span", { text: t("repo.refresh") }));
-      refreshButton.addEventListener("click", () => refresh(refreshButton));
-      repoActions.push(refreshButton);
-      if (live) repoActions.push(h(doc, "button", { type: "button", class: "btn btn--link", onClick: useDeployed }, icon(doc, "rotate-ccw"), h(doc, "span", { text: t("repo.useDeployed") })));
+      actions.push(view);
     }
+    actions.push(h(doc, "a", { class: ["btn", app.repo ? "btn--ghost" : "btn--primary"], href: "#/validate" }, icon(doc, "shield-check"), h(doc, "span", { text: t("nav.validateLong") })));
+    const refreshButton = h(doc, "button", { type: "button", class: "btn btn--ghost" }, icon(doc, "refresh-cw"), h(doc, "span", { text: t("repo.refresh") }));
+    refreshButton.addEventListener("click", () => refresh(refreshButton));
+    actions.push(refreshButton);
+
+    const sourceBits = [fromGitHub ? t("catalog.fromGitHub") : t("catalog.fromFolder")];
+    if (fromGitHub && app.catalog && app.catalog.listedAt) sourceBits.push(t("catalog.listedAt", { time: i18n.formatTime(new Date(app.catalog.listedAt)) }));
 
     const hero = h(
       doc,
@@ -419,9 +419,9 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
       h(doc, "p", { class: "eyebrow" }, icon(doc, app.repo ? "github" : "book-open"), h(doc, "span", { text: app.repo ? app.repo.fullName : t("repo.unknown") })),
       h(doc, "h1", { id: "home-title", tabindex: "-1", text: siteTitle() }),
       h(doc, "p", { class: "lead", text: i18n.localize(config.siteTagline) }),
-      repoActions.length ? h(doc, "div", { class: "hero__actions" }, repoActions) : null,
-      h(doc, "p", { class: ["hero__source", live && "is-live"] }, icon(doc, live ? "globe" : "git-branch"), h(doc, "span", { text: [live ? t("repo.sourceLive") : t("repo.sourceDeployed"), ...sourceBits].join(" · ") })),
-      noticeView(),
+      h(doc, "div", { class: "hero__actions" }, actions),
+      h(doc, "p", { class: ["hero__source", fromGitHub && "is-live"] }, icon(doc, fromGitHub ? "globe" : "folder-open"), h(doc, "span", { text: sourceBits.join(" · ") })),
+      catalogNotices().map(noticeView),
     );
 
     // Búsqueda y filtro por categoría.
@@ -438,7 +438,7 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
             "div",
             { class: "segmented", role: "group", "aria-label": t("home.filter") },
             ["all", ...categories].map((category) => {
-              const count = category === "all" ? documents.length : documents.filter((d) => categoryOf(d) === category).length;
+              const count = category === "all" ? docs.length : docs.filter((d) => categoryOf(d) === category).length;
               const label = category === "all" ? t("home.filterAll") : t(`section.${category}`);
               const button = h(doc, "button", { type: "button", class: "segmented__option", "aria-pressed": "false", dataset: { category } }, label, h(doc, "span", { class: "segmented__count", text: String(count) }));
               button.addEventListener("click", () => {
@@ -454,19 +454,19 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     // Secciones y tarjetas.
     const cards = [];
     const sections = categories.map((category) => {
-      const docs = documents.filter((d) => categoryOf(d) === category);
+      const inCategory = docs.filter((d) => categoryOf(d) === category);
       const titleId = `section-${category}`;
       const list = h(
         doc,
         "ul",
         { class: "card-grid" },
-        docs.map((entry) => {
+        inCategory.map((entry) => {
           const card = renderCard(entry);
           cards.push({ entry, category, card, index: searchIndexText(entry) });
           return card;
         }),
       );
-      const empty = h(doc, "p", { class: "empty", hidden: docs.length > 0 });
+      const empty = h(doc, "p", { class: "empty", hidden: inCategory.length > 0 });
       const count = h(doc, "span", { class: "section-count" });
       const section = h(
         doc,
@@ -476,7 +476,7 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
         list,
         empty,
       );
-      return { category, section, count, empty, docs };
+      return { category, section, count, empty, docs: inCategory };
     });
 
     function applyFilters() {
@@ -505,9 +505,8 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     return h(doc, "div", { class: "home" }, hero, invalid.length ? renderInvalid(invalid) : null, h(doc, "div", { class: "toolbar" }, search, filter), sections.map((s) => s.section));
   }
 
-  /** Documentos que no siguen el formato (solo aparecen al leer en vivo desde GitHub). */
+  /** Documentos que no siguen el formato: se listan con sus errores y no se publican como tarjetas. */
   function renderInvalid(entries) {
-    const branch = (app.manifest.repository && app.manifest.repository.branch) || (app.repo && app.repo.branch) || "main";
     const encodePath = (path) => path.split("/").map(encodeURIComponent).join("/");
     return h(
       doc,
@@ -521,8 +520,8 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
         { class: "invalid-docs__list" },
         entries.map((entry) => {
           let source = null;
-          if (app.repo) {
-            source = h(doc, "a", { class: "invalid-doc__source", href: `${app.repo.url}/blob/${encodePath(branch)}/${encodePath(entry.path)}` }, icon(doc, "github"), h(doc, "span", { text: t("home.invalidOpen") }));
+          if (app.repo && app.source === "github") {
+            source = h(doc, "a", { class: "invalid-doc__source", href: `${app.repo.url}/blob/HEAD/${encodePath(entry.path)}` }, icon(doc, "github"), h(doc, "span", { text: t("home.invalidOpen") }));
             markExternal(doc, t, source);
           }
           return h(
@@ -594,7 +593,7 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
 
   async function renderDocument(route, token) {
     if (!enabledTypes(activeMode).includes(route.type)) return messageView({ title: t("doc.notFound"), body: t("doc.disabled"), iconName: "ban" });
-    const entry = app.manifest.documents.find((d) => d.type === route.type && d.slug === route.slug);
+    const entry = documents().find((d) => d.type === route.type && d.slug === route.slug);
     if (!entry) return messageView({ title: t("doc.notFound"), body: t("doc.notFoundBody"), iconName: "file-text" });
     if (entry.invalid) return invalidView(entry, entry.errors || []);
 
@@ -610,17 +609,8 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     const analysis = analyze(entry.path, text);
     if (analysis.errors.length) return invalidView(entry, analysis.errors);
     const meta = analysis.meta;
-    const tokens = {
-      ...repositoryTokens(app.repo),
-      title: i18n.localize(meta.title),
-      description: i18n.localize(meta.description),
-      version: String(meta.version),
-      author: meta.author || "",
-      updated: meta.updated,
-      slug: meta.slug,
-    };
     const current = { ...entry, category: analysis.category };
-    const ctx = viewContext({ entry: current, tokens, docBaseUrl: documentUrl(entry), docDir: dirname(entry.path) });
+    const ctx = viewContext({ entry: current, tokens: documentTokens(meta), docBaseUrl: new URL(entry.path, doc.baseURI).href, docDir: dirname(entry.path) });
     const stateKey = documentStateKey({ prefix: config.storagePrefix, repository: app.repo, slug: meta.slug, version: meta.version, type: entry.type });
     const view = entry.type === "steps" ? renderStepsView(ctx, { entry: current, analysis, stateKey, anchor: route.anchor }) : renderQuizView(ctx, { entry: current, analysis, stateKey });
     view.key = `${entry.type}:${entry.slug}`;
@@ -629,11 +619,34 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     return view;
   }
 
+  function renderValidator() {
+    const view = renderValidatorView({
+      doc,
+      win,
+      t,
+      lang: i18n.lang,
+      store,
+      draftKey: validatorDraftKey({ prefix: config.storagePrefix }),
+      announce,
+      analyze,
+      existing: documents,
+      preview: previewView,
+    });
+    view.key = "validate";
+    view.lang = i18n.lang;
+    doc.title = `${t("validator.title")} · ${siteTitle()}`;
+    return view;
+  }
+
   // ── Router ────────────────────────────────────────────────────────────────
   async function render({ keepFocus = false, preserveScroll = false } = {}) {
-    if (!app.manifest) return;
+    if (!app.catalog) return;
     const route = parseRoute(win.location.hash);
     if (!route) return;
+    if (els.navValidate) {
+      if (route.name === "validate") els.navValidate.setAttribute("aria-current", "page");
+      else els.navValidate.removeAttribute("aria-current");
+    }
 
     // Mismo documento, otra ancla: no se reconstruye la vista.
     if (route.name === "doc" && app.view && app.view.key === `${route.type}:${route.slug}` && app.view.lang === i18n.lang && !keepFocus && !preserveScroll) {
@@ -647,7 +660,10 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     let element = null;
     let view = null;
     if (route.name === "home") element = renderHome(route.params);
-    else if (route.name === "doc") {
+    else if (route.name === "validate") {
+      view = renderValidator();
+      element = view.element;
+    } else if (route.name === "doc") {
       const result = await renderDocument(route, token);
       if (token !== app.renderToken) return;
       if (result && result.element) {
@@ -740,20 +756,22 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
 
   const ready = (async () => {
     try {
-      const [deployed, steps, test] = await Promise.all([fetchJson(config.manifestUrl), fetchJson("schemas/steps.schema.json"), fetchJson("schemas/test.schema.json")]);
-      if (!deployed || !Array.isArray(deployed.documents)) throw new Error("documents.manifest.json no tiene la lista «documents».");
-      app.deployed = deployed;
+      const [steps, test] = await Promise.all([fetchJson("schemas/steps.schema.json"), fetchJson("schemas/test.schema.json")]);
       app.schemas = { steps, test };
     } catch (error) {
       els.view.removeAttribute("aria-busy");
-      els.view.replaceChildren(messageView({ title: t("error.manifest"), body: t("error.manifestHint"), details: [{ where: config.manifestUrl, message: String(error.message || error) }], retry: true }));
+      els.view.replaceChildren(messageView({ title: t("error.start"), body: t("error.startHint"), details: [{ where: "schemas/", message: String(error.message || error) }], retry: true }));
       return;
     }
-    app.repo = resolveRepository({ location: win.location, override: config.repository, manifestRepository: app.deployed.repository });
-    const live = session.getJSON(liveKey());
-    app.manifest = live && live.source === "github" && Array.isArray(live.documents) ? live : app.deployed;
+    // En GitHub Pages (o con un repositorio configurado) se lee el repositorio; si no, la carpeta local.
+    const override = isValidRepository(config.repository) ? config.repository : null;
+    const onPages = Boolean(parsePagesLocation(win.location));
+    app.source = override || onPages ? "github" : "local";
+    const gitRepository = app.source === "local" ? await readGitRepository() : null;
+    app.repo = resolveRepository({ location: win.location, override, gitRepository });
     paintRepo();
     paintFooter();
+    await loadCatalog();
     await render();
   })();
 
@@ -765,8 +783,11 @@ export function startApp({ win, libs, config = CONFIG, mode = DOCUMENTATION_MODE
     get repository() {
       return app.repo;
     },
-    get manifest() {
-      return app.manifest;
+    get source() {
+      return app.source;
+    },
+    get catalog() {
+      return app.catalog;
     },
     get view() {
       return app.view;

@@ -2,25 +2,22 @@
 // https://github.com/Edunzz
 
 /**
- * github.js — De qué repositorio es este sitio y cómo leerlo en vivo.
+ * github.js — De qué repositorio es este sitio y qué documentos tiene.
  *
  * Un fork o una copia deben mostrar SU repositorio sin tocar código. Orden de
  * resolución (el primero que aplique):
  *
- *   1. Override en config.js (`CONFIG.repository`).
+ *   1. Override en config.js (`CONFIG.repository`), útil con un dominio propio.
  *   2. La URL de GitHub Pages: `https://{owner}.github.io/{repo}/` o, para un
  *      sitio de usuario/organización, `https://{owner}.github.io/` → repo
- *      `{owner}.github.io`. Si el manifiesto apunta al mismo repositorio se
- *      usan sus datos (mayúsculas reales, rama, URL de Pages).
- *   3. El manifiesto generado en el workflow (`GITHUB_REPOSITORY`), útil con
- *      un dominio propio.
- *   4. Nada: vista local, sin enlaces al repositorio.
+ *      `{owner}.github.io`.
+ *   3. En local, el remoto `origin` de `.git/config` si el servidor lo sirve
+ *      (así los enlaces apuntan al repositorio de quien clonó).
+ *   4. Nada: vista local sin enlaces al repositorio.
  *
- * La URL tiene prioridad sobre el manifiesto porque un manifiesto versionado
- * puede venir del repositorio original cuando un fork publica desde una rama.
+ * En GitHub Pages la lista de documentos sale de la API pública (un único
+ * árbol del repositorio, sin token). No hay paso de compilación.
  */
-
-import { sortDocuments } from "./documents.js";
 
 const PAGES_HOST_RE = /^([a-z0-9](?:[a-z0-9-]{0,38}))\.github\.io$/i;
 const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
@@ -61,7 +58,7 @@ export function defaultPagesUrl(owner, name) {
 }
 
 /** Todo lo derivable de `owner/name`, listo para enlaces y tokens. */
-export function repositoryContext({ owner, name, branch = "", sha = "", pagesUrl = "", source = "unknown" }) {
+export function repositoryContext({ owner, name, branch = "", pagesUrl = "", source = "unknown" }) {
   const fullName = `${owner}/${name}`;
   const url = `https://github.com/${fullName}`;
   return {
@@ -72,29 +69,45 @@ export function repositoryContext({ owner, name, branch = "", sha = "", pagesUrl
     cloneUrl: `${url}.git`,
     pagesUrl: pagesUrl || defaultPagesUrl(owner, name),
     branch: branch || "",
-    sha: sha || "",
     source,
   };
 }
 
-function sameRepository(a, b) {
-  return a.owner.toLowerCase() === b.owner.toLowerCase() && a.name.toLowerCase() === b.name.toLowerCase();
+/**
+ * `owner/name` del remoto de GitHub en el texto de `.git/config`
+ * (prefiere `origin`). Acepta https, ssh (`git@github.com:o/r.git`) y `ssh://`.
+ */
+export function parseGitConfig(text) {
+  const remotes = [];
+  let current = null;
+  for (const line of String(text || "").split(/\r?\n/)) {
+    const section = /^\s*\[\s*remote\s+"([^"]+)"\s*\]\s*$/.exec(line);
+    if (section) {
+      current = section[1];
+      continue;
+    }
+    if (/^\s*\[/.test(line)) {
+      current = null;
+      continue;
+    }
+    const url = current && /^\s*url\s*=\s*(\S+)\s*$/.exec(line);
+    if (!url) continue;
+    const match = /github\.com[/:]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/i.exec(url[1]);
+    if (match) remotes.push({ remote: current, owner: match[1], name: match[2] });
+  }
+  const chosen = remotes.find((r) => r.remote === "origin") || remotes[0];
+  return chosen && isValidRepository(chosen) ? { owner: chosen.owner, name: chosen.name } : null;
 }
 
 /**
  * Resuelve el repositorio con el orden documentado arriba.
- * @param {{location?:{hostname:string,pathname:string}, override?:object, manifestRepository?:object|null}} opts
+ * @param {{location?:{hostname:string,pathname:string}, override?:object, gitRepository?:object|null}} opts
  */
-export function resolveRepository({ location = null, override = null, manifestRepository = null } = {}) {
+export function resolveRepository({ location = null, override = null, gitRepository = null } = {}) {
   if (isValidRepository(override)) return repositoryContext({ ...override, source: "config" });
-
-  const manifest = isValidRepository(manifestRepository) ? manifestRepository : null;
   const fromLocation = parsePagesLocation(location);
-  if (fromLocation && isValidRepository(fromLocation)) {
-    if (manifest && sameRepository(manifest, fromLocation)) return repositoryContext({ ...manifest, source: "manifest" });
-    return repositoryContext({ owner: fromLocation.owner, name: fromLocation.name, source: "location" });
-  }
-  if (manifest) return repositoryContext({ ...manifest, source: "manifest" });
+  if (fromLocation && isValidRepository(fromLocation)) return repositoryContext({ owner: fromLocation.owner, name: fromLocation.name, source: "location" });
+  if (isValidRepository(gitRepository)) return repositoryContext({ ...gitRepository, source: "git" });
   return null;
 }
 
@@ -107,7 +120,7 @@ export function repositoryTokens(repo) {
     repo_name: repo ? repo.name : "",
     pages_url: repo ? repo.pagesUrl : "",
     clone_url: repo ? repo.cloneUrl : "",
-    branch: repo ? repo.branch : "",
+    branch: repo ? repo.branch || "main" : "",
   };
 }
 
@@ -146,92 +159,27 @@ async function request(url, { fetchImpl, timeoutMs = 15000, accept = "applicatio
   throw new GitHubError("http", `HTTP ${response.status}: ${url}`, { status: response.status });
 }
 
-async function requestJson(url, opts) {
-  const response = await request(url, opts);
+/**
+ * Rutas de los documentos del repositorio público en su rama por defecto,
+ * con una sola llamada a la API: `GET /repos/{owner}/{repo}/git/trees/HEAD?recursive=1`.
+ * @param {{repository:object, fetchImpl:Function, isCandidate:(path:string)=>boolean, api?:string, timeoutMs?:number, maxDocuments?:number}} opts
+ * @returns {Promise<{paths:string[], truncated:boolean}>}
+ */
+export async function listRepositoryDocuments({ repository, fetchImpl, isCandidate, api = "https://api.github.com", timeoutMs = 15000, maxDocuments = 100 }) {
+  if (!isValidRepository(repository)) throw new GitHubError("no-repo");
+  const url = `${api}/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/git/trees/HEAD?recursive=1`;
+  const response = await request(url, { fetchImpl, timeoutMs });
+  let tree;
   try {
-    return await response.json();
+    tree = await response.json();
   } catch {
     throw new GitHubError("invalid", `Respuesta no JSON: ${url}`);
   }
-}
-
-const encodePath = (path) => path.split("/").map(encodeURIComponent).join("/");
-
-/**
- * Lee el repositorio público: metadatos, árbol de archivos y cada Markdown.
- * `analyze({ path, text, rawUrl })` convierte un documento en entrada de
- * manifiesto (válida o marcada `invalid` con sus errores); así este módulo no
- * conoce el formato. Si la lectura falla, el documento va a `skipped`.
- */
-export async function fetchLiveDocuments({
-  repository,
-  fetchImpl,
-  isDocumentPath,
-  analyze,
-  api = "https://api.github.com",
-  raw = "https://raw.githubusercontent.com",
-  maxDocuments = 100,
-  timeoutMs = 15000,
-}) {
-  if (!isValidRepository(repository)) throw new GitHubError("no-repo");
-  const { owner, name } = repository;
-  const base = `${api}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
-
-  const info = await requestJson(base, { fetchImpl, timeoutMs });
-  if (!info || typeof info !== "object") throw new GitHubError("invalid");
-  if (info.private) throw new GitHubError("private");
-  const branch = repository.branch || info.default_branch || "main";
-
-  const tree = await requestJson(`${base}/git/trees/${encodeURIComponent(branch)}?recursive=1`, { fetchImpl, timeoutMs });
   if (!tree || !Array.isArray(tree.tree)) throw new GitHubError("invalid");
-
   const paths = tree.tree
-    .filter((entry) => entry && entry.type === "blob" && typeof entry.path === "string" && isDocumentPath(entry.path))
+    .filter((entry) => entry && entry.type === "blob" && typeof entry.path === "string" && isCandidate(entry.path))
     .map((entry) => entry.path)
     .sort()
     .slice(0, maxDocuments);
-
-  const documents = [];
-  const skipped = [];
-  await Promise.all(
-    paths.map(async (path) => {
-      const rawUrl = `${raw}/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/refs/heads/${encodePath(branch)}/${encodePath(path)}`;
-      try {
-        const response = await request(rawUrl, { fetchImpl, timeoutMs, accept: "text/plain" });
-        const text = await response.text();
-        documents.push(await analyze({ path, text, rawUrl }));
-      } catch (error) {
-        skipped.push({ path, message: (error && error.message) || String(error) });
-      }
-    }),
-  );
-
-  return {
-    repository: { owner: info.owner && info.owner.login ? info.owner.login : owner, name: info.name || name, branch },
-    truncated: Boolean(tree.truncated),
-    documents: sortDocuments(documents),
-    skipped: skipped.sort((a, b) => a.path.localeCompare(b.path)),
-  };
-}
-
-/**
- * «Actualizar desde el repositorio público». Nunca lanza: si la API falla
- * devuelve el manifiesto del despliegue con el error para mostrarlo.
- * @returns {Promise<{ok:boolean, manifest:object, error?:GitHubError, skipped?:Array, truncated?:boolean}>}
- */
-export async function refreshFromGitHub({ deployed, repository, now = () => new Date(), ...options }) {
-  try {
-    const live = await fetchLiveDocuments({ repository, ...options });
-    const manifest = {
-      ...deployed,
-      source: "github",
-      generatedAt: now().toISOString(),
-      repository: { ...(deployed && deployed.repository), ...live.repository, sha: "", url: `https://github.com/${live.repository.owner}/${live.repository.name}` },
-      documents: live.documents,
-    };
-    return { ok: true, manifest, skipped: live.skipped, truncated: live.truncated };
-  } catch (error) {
-    const wrapped = error instanceof GitHubError ? error : new GitHubError("invalid", (error && error.message) || String(error));
-    return { ok: false, manifest: deployed, error: wrapped };
-  }
+  return { paths, truncated: Boolean(tree.truncated) };
 }

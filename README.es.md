@@ -1,35 +1,38 @@
 # DocPages
 
-**Convierte archivos Markdown en un sitio bilingüe (español/inglés) en GitHub Pages: procedimientos paso a paso, guías de laboratorio y pruebas de práctica.**
+**Convierte archivos Markdown en un sitio bilingüe (español/inglés) en GitHub Pages: procedimientos paso a paso, guías de laboratorio y pruebas de práctica. Sin instalar ni compilar nada.**
 
 [Read in English](README.md)
 
-| Portada | Guía de laboratorio | Prueba de práctica |
-|---|---|---|
-| ![Portada con buscador y las tres secciones](docs/images/home.es.png) | ![Guía de laboratorio con objetivos, pasos y progreso](docs/images/lab-guide.es.png) | ![Prueba de práctica con preguntas corregidas y puntuación](docs/images/practice-test.es.png) |
+| Portada | Pestaña Validar |
+|---|---|
+| ![Portada con buscador y las tres secciones](docs/images/home.es.png) | ![Pestaña Validar con el editor, los errores y la vista previa](docs/images/validate.es.png) |
+| **Guía de laboratorio** | **Prueba de práctica** |
+| ![Guía de laboratorio con objetivos, pasos y progreso](docs/images/lab-guide.es.png) | ![Prueba de práctica con la lista de preguntas, respuestas corregidas y puntuación](docs/images/practice-test.es.png) |
 
 ## ¿Qué puedo publicar?
 
-| Tipo | Qué ve el lector | Archivo que escribes |
+| Tipo | Qué ve el lector | El nombre del archivo termina en |
 |---|---|---|
-| **Procedimiento** | Pasos con casillas y una barra de progreso. | `documents/steps/mi-procedimiento.steps.md` |
-| **Guía de laboratorio** | Un procedimiento con objetivos, requisitos, duración y nivel. | `documents/steps/mi-laboratorio.steps.md` con `kind: "lab-guide"` |
-| **Prueba de práctica** | Preguntas de entrenamiento que responde, comprueba y puntúa. | `documents/tests/mi-prueba.test.md` |
+| **Procedimiento** | Pasos con casillas y una barra de progreso. | `.procedure.steps.md` |
+| **Guía de laboratorio** | Un procedimiento con objetivos, requisitos, duración y nivel. | `.labguide.steps.md` |
+| **Prueba de práctica** | Preguntas de entrenamiento que responde, comprueba y puntúa. | `.test.md` |
 
-Todo funciona en el navegador: sin servidor y sin base de datos. El progreso y las respuestas se guardan solo en el navegador de cada lector.
+**El final del nombre del archivo decide el tipo.** Los procedimientos y las guías van en `documents/steps/`; las pruebas, en `documents/tests/`.
 
-## Empieza en 4 pasos
+Todo funciona en el navegador: sin servidor, sin base de datos y sin compilar. El progreso y las respuestas se guardan solo en el navegador de cada lector.
+
+## Empieza en 3 pasos
 
 1. Pulsa **Use this template** (o haz un *fork*) para tener tu propia copia.
-2. En tu copia, abre **Settings → Pages** y en **Source** elige **GitHub Actions**.
-3. Añade o edita archivos en `documents/` (mira abajo) y haz *push* a `main`.
-4. Espera el check verde en la pestaña **Actions**. Tu sitio queda en `https://<tu-usuario>.github.io/<tu-repositorio>/`.
+2. En tu copia, abre **Settings → Pages** y elige **Deploy from a branch**, rama **`main`**, carpeta **`/ (root)`**. Guarda.
+3. Añade o edita archivos en `documents/` y súbelos a `main`. En uno o dos minutos tu sitio está en `https://<tu-usuario>.github.io/<tu-repositorio>/`.
 
-No tienes que cambiar nombres ni enlaces: el sitio detecta solo tu usuario y tu repositorio. Los archivos que ya hay en `documents/` son ejemplos; puedes conservarlos, editarlos o borrarlos.
+No tienes que cambiar nombres ni enlaces: el sitio detecta solo tu usuario, tu repositorio y tus documentos. Los archivos que ya hay en `documents/` son ejemplos; puedes conservarlos, editarlos o borrarlos.
 
 ## Escribir un procedimiento
 
-Crea `documents/steps/instalar-la-app.steps.md`:
+Crea `documents/steps/instalar-la-app.procedure.steps.md`:
 
 ```markdown
 ---
@@ -37,7 +40,6 @@ title: "Instalar la aplicación"
 description: "Desde la descarga hasta el primer inicio."
 slug: "instalar-la-app"
 type: "steps"
-kind: "procedure"
 version: "1.0.0"
 updated: "2026-10-04"
 ---
@@ -58,7 +60,7 @@ updated: "2026-10-04"
 
 ## Escribir una guía de laboratorio
 
-Es un procedimiento con `kind: "lab-guide"` y unos campos extra que aparecen arriba de la página:
+Mismo formato, pero el nombre termina en `.labguide.steps.md` y puedes añadir objetivos, requisitos, duración y nivel (aparecen arriba de la página). Crea `documents/steps/primer-contenedor.labguide.steps.md`:
 
 ```markdown
 ---
@@ -66,7 +68,6 @@ title: "Laboratorio: tu primer contenedor"
 description: "Ejecuta un contenedor y detenlo."
 slug: "lab-primer-contenedor"
 type: "steps"
-kind: "lab-guide"
 version: "1.0.0"
 updated: "2026-10-04"
 duration: "30 minutos"
@@ -83,7 +84,7 @@ prerequisites:
 :::
 ```
 
-`level` puede ser `beginner` (básico), `intermediate` (intermedio) o `advanced` (avanzado). Ejemplo completo: [`first-practice-test-lab.steps.md`](documents/steps/first-practice-test-lab.steps.md).
+`level` puede ser `beginner` (básico), `intermediate` (intermedio) o `advanced` (avanzado). Ejemplo completo, que enseña los siete tipos de pregunta: [`first-practice-test-lab.labguide.steps.md`](documents/steps/first-practice-test-lab.labguide.steps.md).
 
 ## Escribir una prueba de práctica
 
@@ -159,113 +160,101 @@ Hello! This paragraph is shown in English.
 
 El lector cambia de idioma con los botones ES/EN de la parte de arriba del sitio.
 
-## Si un archivo está mal, te enteras
+## Revisa tu documento: la pestaña Validar
 
-El sitio nunca publica un archivo que no siga el formato. Revisa tus archivos con:
+Abre **Validar** (arriba a la derecha del sitio, publicado o en tu equipo):
 
-```bash
-npm run validate
-```
+1. **Abre** o arrastra tus archivos `.md`, o empieza desde una **plantilla** (procedimiento, guía de laboratorio o prueba de práctica con los siete tipos de pregunta).
+2. Cada error indica **su línea**; al pulsarlo, el cursor salta allí. Puedes corregirlo ahí mismo, en el editor.
+3. Cuando no hay errores ves la **vista previa real**: puedes marcar pasos o responder las preguntas.
+4. **Descarga** el archivo (o cópialo), guárdalo en la carpeta que te indica y súbelo a `main`.
 
-Cada problema indica el archivo, la línea y el motivo:
+No se sube nada a ningún sitio: todo ocurre en tu navegador. El validador también te avisa si otro documento ya usa tu `slug`.
 
-```text
-✖ documents/tests/redes-basicas.test.md
-    error   L11: Pregunta 1: una pregunta «single» necesita exactamente una opción correcta «- [x]» (tiene 0).
-```
-
-En GitHub se hace la misma revisión en cada *push* y en cada *pull request*. Si falla, GitHub marca la línea del archivo y el sitio publicado no cambia.
+El sitio nunca publica un archivo que no siga el formato: si alguno se cuela en `documents/`, la portada lo muestra en **Documentos con errores de formato**, con la línea de cada error.
 
 | Si el mensaje dice… | Qué hacer |
 |---|---|
-| «El archivo no sigue el formato» | Renombra el archivo para que termine en `.steps.md` o `.test.md`, o sácalo de `documents/`. |
+| «El archivo no sigue el formato» / «Indica el tipo en el nombre» | Renómbralo para que termine en `.procedure.steps.md`, `.labguide.steps.md` o `.test.md`. |
 | «Atributo desconocido» o «Atributo mal escrito» | Corrige la errata en la línea `:::` y usa comillas: `title="…"`. |
 | «exactamente una opción correcta» | Marca una sola `- [x]` (usa `type="multiple"` si hay varias). |
 | «fuera de un «:::question»» | Mueve las opciones dentro de un bloque de pregunta. |
-| «slug duplicado» | Dos archivos usan el mismo `slug`; cambia uno. |
+| «slug duplicado» / «ya lo usa» | Dos archivos usan el mismo `slug`; cambia uno. |
 
-## Probarlo en tu equipo (opcional)
+## Verlo en tu equipo (opcional)
 
-Necesitas [Node.js](https://nodejs.org/) 22 o superior.
+Sirve la carpeta del repositorio con cualquier servidor web que muestre el contenido de las carpetas. En VS Code, clic derecho sobre `index.html` → **Open with Live Server**; o, en una terminal dentro de la carpeta:
 
 ```bash
-npm ci            # instalar (una vez)
-npm run validate  # revisar tus documentos
-npm run preview   # abre http://localhost:8080/docpages/
+python -m http.server 8000
 ```
+
+Abre <http://localhost:8000/>. La portada muestra lo que hay en **tu** carpeta `documents/`, con los errores marcados, y los enlaces al repositorio apuntan a tu copia. Abrir `index.html` con doble clic no funciona: los navegadores bloquean la aplicación cuando se abre como archivo.
 
 ## Configuración
 
 - **Mostrar solo algunos tipos:** en `assets/js/config.js`, pon `DOCUMENTATION_MODE` en `"all"` (todo), `"steps"` (procedimientos y guías de laboratorio) o `"tests"` (pruebas de práctica).
 - **Nombre del sitio:** `siteTitle` y `siteTagline` en el mismo archivo.
+- **Dominio propio:** pon `repository: { owner: "tu-usuario", name: "tu-repositorio" }` en el mismo archivo, para que el sitio sepa qué repositorio leer.
 - **Colores y logo:** las variables del inicio de `assets/css/app.css` y el archivo `assets/icons/logo.svg`.
 
 ## Problemas comunes
 
 | Problema | Solución |
 |---|---|
-| El workflow falla en «Configurar GitHub Pages» | Settings → Pages → Source: **GitHub Actions** y vuelve a ejecutar el workflow. |
-| Mi documento nuevo no aparece | Ejecuta `npm run validate`; revisa el nombre del archivo y la carpeta. |
+| Un documento nuevo no aparece | Espera uno o dos minutos a que Pages publique y pulsa **Actualizar** en la portada. Revisa el nombre en **Validar**. |
+| «Límite de consultas» en la portada | El sitio lee la lista de documentos de GitHub (como mucho una vez cada 10 minutos por navegador) y GitHub permite 60 lecturas por hora por red. Espera un poco; mientras tanto se usa la última lista guardada. |
 | Se borró mi progreso o mis respuestas | Cambiaste `version`, `slug` o algún `id`. Cada versión guarda su propio progreso, a propósito. |
-| «Límite de solicitudes» al actualizar desde GitHub | GitHub permite 60 solicitudes por hora sin iniciar sesión. Espera y vuelve a intentarlo. |
-| Abrir `index.html` directamente da error | Usa `npm run preview`: los documentos no se pueden cargar desde `file://`. |
+| El sitio muestra el Markdown como páginas sueltas | Falta el archivo `.nojekyll` en la raíz; vuelve a añadirlo (es un archivo vacío). |
 
 ## Con un asistente de IA
 
-El skill [`.github/skills/documentation-pages/SKILL.md`](.github/skills/documentation-pages/SKILL.md) le enseña todas las reglas a los agentes de IA (GitHub Copilot, Claude…). Por ejemplo, pega tus preguntas con sus respuestas y pide: *«Conviértelas en una prueba de práctica»*. El agente escribe un `.test.md` válido y ejecuta `npm run validate`.
+El skill [`.github/skills/documentation-pages/SKILL.md`](.github/skills/documentation-pages/SKILL.md) le enseña todas las reglas a los agentes de IA (GitHub Copilot, Claude…). Por ejemplo, pega tus preguntas con sus respuestas y pide: *«Conviértelas en una prueba de práctica»*. El agente escribe un `.test.md` válido; tú lo revisas en **Validar** y lo subes.
 
 ## Para desarrolladores
 
 <details>
-<summary>Comandos, cómo se publica, estructura y seguridad</summary>
-
-### Comandos
-
-| Comando | Qué hace |
-|---|---|
-| `npm run vendor` | Copia las librerías del navegador a `assets/vendor/` y genera el sprite de iconos. |
-| `npm run validate` | Valida cada Markdown de `documents/`. `--json` para agentes y `--strict` para fallar también con avisos. |
-| `npm run manifest` | Escribe `documents.manifest.json` (el índice del sitio). No escribe nada si hay errores. |
-| `npm run check:links` | Revisa enlaces internos, imágenes, imports e iconos. |
-| `npm test` | Pruebas unitarias, de integración (jsdom) y de accesibilidad (axe-core). |
-| `npm run build` | Todo lo anterior salvo las pruebas, más el sitio estático en `_site/`. |
-| `npm run preview` | Construye y sirve `_site/` bajo `/docpages/`, como un sitio de proyecto de GitHub Pages. |
-
-En Git Bash para Windows, antepón `MSYS_NO_PATHCONV=1` al ejecutar `node scripts/serve.mjs --base /mi-repo/`.
-
-### Publicación
-
-- [`.github/workflows/pages.yml`](.github/workflows/pages.yml) se ejecuta en cada *push* a `main`: instala, valida, genera el manifiesto con los datos de tu repositorio, revisa enlaces, prueba, construye `_site/` y despliega. Permisos mínimos (`contents: read`, `pages: write`, `id-token: write`), acciones fijadas por SHA y sin despliegues superpuestos.
-- [`.github/workflows/validate.yml`](.github/workflows/validate.yml) se ejecuta en los *pull requests* con permisos de solo lectura, así los errores se marcan antes de unir los cambios.
-- Sin Actions: ejecuta `npm run vendor && npm run manifest`, versiona el resultado, elige **Settings → Pages → Deploy from a branch → `main` / root** y conserva el archivo `.nojekyll`.
+<summary>Cómo funciona, pruebas, estructura y seguridad</summary>
 
 ### Cómo funciona
 
-- Rutas con `#` (`#/steps/{slug}`, `#/tests/{slug}`), así el sitio funciona en la raíz del dominio y bajo `/{repositorio}/`.
-- El repositorio se detecta desde la URL de GitHub Pages y, si no, desde el manifiesto del despliegue; `CONFIG.repository` en `config.js` tiene prioridad (útil con un dominio propio).
-- **Actualizar desde el repositorio público** lee los documentos en vivo con la API pública de GitHub, los valida con las mismas reglas que el CI y muestra los archivos inválidos con sus errores. Si GitHub no responde, se conserva el contenido desplegado.
-- Los scripts de Node importan los mismos módulos que el navegador: la validación local, la del CI y la del sitio siempre coinciden.
+- **Sin compilación.** GitHub Pages sirve el repositorio tal cual. Las librerías del navegador están versionadas en `assets/vendor/` (sin CDN).
+- **Lista de documentos.** En GitHub Pages, una consulta a la API pública de GitHub (`git/trees/HEAD`) lista `documents/` y se guarda 10 minutos en cada navegador; si falla, se usa la última lista guardada. En local, el sitio lee el listado de carpetas del servidor web.
+- **Repositorio.** Sale de la URL de GitHub Pages; en local, de `.git/config` (`origin`) si el servidor lo sirve; `CONFIG.repository` tiene prioridad sobre ambos.
+- **Mismas reglas en todas partes.** La portada, la pestaña Validar y el validador por consola usan los mismos módulos (`assets/js/documents.js`, `quiz.js`, `markdown.js`, `schema.js`).
+- Rutas con `#` (`#/steps/{slug}`, `#/tests/{slug}`, `#/validate`), así el sitio funciona en la raíz del dominio y bajo `/{repositorio}/`.
+
+### Línea de comandos (opcional)
+
+```bash
+node scripts/validate-documents.mjs        # solo necesita Node: --json para agentes, --strict para fallar también con avisos
+npm ci && npm test                         # pruebas unitarias, de integración (jsdom) y de accesibilidad (axe-core)
+npm run check:links                        # enlaces internos, imports e iconos
+npm run vendor                             # actualiza assets/vendor y el sprite tras cambiar librerías
+```
+
+En GitHub Actions, `validate-documents.mjs` además escribe anotaciones `::error file=…,line=…::`, por si quieres añadir tu propia revisión.
 
 ### Estructura
 
 ```text
-assets/js/        app, router, parser de Markdown, validación, steps.js (procedimientos y guías), quiz.js (pruebas)
-assets/css/       estilos (tema claro y oscuro)
-assets/vendor/    markdown-it, js-yaml, DOMPurify, Prism (sin CDN)
+assets/js/        app, router, catálogo (descubre documentos), validador (pestaña Validar), pasos, pruebas, parser, validación
+assets/css/       estilos (tema claro y oscuro, responsive)
+assets/vendor/    markdown-it, js-yaml, DOMPurify, Prism
 documents/        tus documentos (steps/ y tests/)
 schemas/          JSON Schema del front matter
-scripts/          validate, manifest, check-links, build-site, serve, vendor
+scripts/          validate-documents, check-links, vendor
 tests/            node:test + jsdom + axe-core
 docs/             diagrama del flujo del progreso y capturas
 ```
 
 ### Seguridad
 
-El HTML crudo nunca se ejecuta: markdown-it trabaja con `html: false` y todo el HTML generado pasa por DOMPurify. Solo se permiten enlaces `http(s)`, `mailto`, `tel`, anclas y rutas relativas (`javascript:` y `data:` son errores de validación). Una política de seguridad de contenido (CSP) estricta bloquea scripts y estilos en línea. No hay tokens en el frontend; la API pública se usa sin autenticación (60 solicitudes por hora y por IP).
+El HTML crudo nunca se ejecuta: markdown-it trabaja con `html: false` y todo el HTML generado pasa por DOMPurify. Solo se permiten enlaces `http(s)`, `mailto`, `tel`, anclas y rutas relativas (`javascript:` y `data:` son errores de validación). Una política de seguridad de contenido (CSP) estricta bloquea scripts y estilos en línea. No hay tokens en el frontend. La pestaña Validar nunca sube archivos.
 
 ### Accesibilidad
 
-HTML semántico, navegación con teclado, foco visible, avisos para lectores de pantalla, estados con icono y texto (no solo color) y respeto por `prefers-reduced-motion`. Las pruebas ejecutan axe-core en todas las vistas y en ambos idiomas.
+HTML semántico, navegación con teclado, foco visible, avisos para lectores de pantalla, estados con icono y texto (no solo color), respeto por `prefers-reduced-motion` y un diseño que funciona desde móviles de 360 px hasta pantallas anchas. Las pruebas ejecutan axe-core en todas las vistas y en ambos idiomas.
 
 </details>
 

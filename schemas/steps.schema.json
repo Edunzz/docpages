@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$comment": "Desarrollado por Jose Eduardo Romero Jimenez - https://github.com/Edunzz",
   "title": "Front matter de {titulo}.steps.md",
-  "description": "Procedimiento o guía de laboratorio con pasos (:::step), subpasos (:::substep) y casillas (- [ ]).",
+  "description": "Procedimiento ({titulo}.procedure.steps.md) o guía de laboratorio ({titulo}.labguide.steps.md) con pasos (:::step), subpasos (:::substep) y casillas (- [ ]). El tipo lo decide el nombre del archivo.",
   "type": "object",
   "required": [
     "title",
@@ -25,14 +25,6 @@
     },
     "type": {
       "const": "steps"
-    },
-    "kind": {
-      "enum": [
-        "procedure",
-        "lab-guide"
-      ],
-      "default": "procedure",
-      "description": "procedure (procedimiento) o lab-guide (guía de laboratorio)"
     },
     "version": {
       "$ref": "#/$defs/version"

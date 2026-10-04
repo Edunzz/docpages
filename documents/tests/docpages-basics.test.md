@@ -7,7 +7,7 @@ description:
   en: "Eight questions, one of each type, to review how documents are written, validated and published."
 slug: "docpages-basics"
 type: "test"
-version: "1.0.0"
+version: "1.1.0"
 author: "Jose Eduardo Romero Jimenez"
 updated: "2026-10-04"
 tags: [practice, quiz, getting-started]
@@ -27,7 +27,7 @@ links:
   - label:
       es: "Laboratorio: crea tu primera prueba"
       en: "Lab: create your first test"
-    url: "../steps/first-practice-test-lab.steps.md"
+    url: "../steps/first-practice-test-lab.labguide.steps.md"
     icon: "flask-conical"
     highlight: true
 reset: true
@@ -44,23 +44,23 @@ Answer each question and press **Check** to see whether you got it right and why
 
 :::question id="suffix" type="single"
 :::lang es
-¿Qué sufijo lleva el archivo de una **guía de laboratorio**?
+¿Cómo se llama el archivo de una **guía de laboratorio**?
 :::
 :::lang en
-Which suffix does a **lab guide** file use?
+What is the file name of a **lab guide**?
 :::
 
-- [x] `.steps.md`
-- [ ] `.test.md`
-- [ ] `.lab.md`
-- [ ] `.md`
+- [x] `mi-lab.labguide.steps.md`
+- [ ] `mi-lab.procedure.steps.md`
+- [ ] `mi-lab.test.md`
+- [ ] `mi-lab.md`
 
 :::explanation
 :::lang es
-Procedimientos y guías de laboratorio comparten el formato `.steps.md`; el campo `kind: "lab-guide"` los distingue. Las pruebas de práctica usan `.test.md`.
+El final del nombre decide el tipo: `.procedure.steps.md` es un procedimiento, `.labguide.steps.md` una guía de laboratorio y `.test.md` una prueba de práctica. Un `.md` sin ese sufijo es un error.
 :::
 :::lang en
-Procedures and lab guides share the `.steps.md` format; the `kind: "lab-guide"` field tells them apart. Practice tests use `.test.md`.
+The end of the name decides the type: `.procedure.steps.md` is a procedure, `.labguide.steps.md` a lab guide and `.test.md` a practice test. A `.md` without that suffix is an error.
 :::
 :::
 :::
@@ -106,29 +106,29 @@ Only `http(s)`, `mailto`, `tel`, anchors and relative paths are allowed. `javasc
 :::
 :::
 
-:::question id="validate-command" type="text" answer="npm run validate"
+:::question id="validate-command" type="text" answer="Validar|Validate|Validador|Validator"
 :::lang es
-¿Qué comando revisa todos los documentos y marca los errores de formato con su línea?
+¿Cómo se llama la pestaña del sitio que revisa un documento y marca cada error con su línea?
 :::
 :::lang en
-Which command checks every document and flags format errors with their line?
+What is the name of the site tab that checks a document and flags each error with its line?
 :::
 
 :::hint
 :::lang es
-Empieza con `npm run`.
+Está en la barra superior, junto al selector de idioma.
 :::
 :::lang en
-It starts with `npm run`.
+It is in the top bar, next to the language switch.
 :::
 :::
 
 :::explanation
 :::lang es
-`npm run validate` revisa cada Markdown de `documents/`. El workflow de GitHub ejecuta lo mismo antes de publicar.
+**Validar** revisa el Markdown en tu navegador, sin instalar nada: muestra los errores con su línea y, cuando no hay errores, la vista previa.
 :::
 :::lang en
-`npm run validate` checks every Markdown file in `documents/`. The GitHub workflow runs the same check before publishing.
+**Validate** checks the Markdown in your browser, without installing anything: it shows the errors with their line and, when there are none, the preview.
 :::
 :::
 :::
@@ -153,28 +153,28 @@ A procedure has 3 tasks and you completed 2. What progress percentage does it sh
 
 :::question id="workflow-order" type="order"
 :::lang es
-Ordena lo que hace el workflow de GitHub cuando haces *push* a `main`:
+Ordena los pasos para publicar un documento nuevo:
 
-1. Validar los documentos
-2. Generar el índice de documentos
-3. Ejecutar las pruebas automáticas
-4. Publicar en GitHub Pages
+1. Escribir el documento en Markdown
+2. Revisarlo en la pestaña Validar
+3. Guardarlo en `documents/` y subirlo a `main`
+4. GitHub Pages lo publica
 :::
 :::lang en
-Put in order what the GitHub workflow does when you push to `main`:
+Put the steps to publish a new document in order:
 
-1. Validate the documents
-2. Generate the document index
-3. Run the automated tests
-4. Publish to GitHub Pages
+1. Write the document in Markdown
+2. Check it in the Validate tab
+3. Save it in `documents/` and upload it to `main`
+4. GitHub Pages publishes it
 :::
 
 :::explanation
 :::lang es
-Si un paso falla, los siguientes no se ejecutan y el sitio publicado no cambia: un documento con errores nunca llega a publicarse.
+Primero se escribe y se revisa en «Validar»; después se sube a `main` y GitHub Pages publica los archivos tal cual, sin compilar nada. Si un documento tuviera errores, el sitio lo mostraría marcado en lugar de publicarlo.
 :::
 :::lang en
-If a step fails, the next ones do not run and the published site does not change: a document with errors never gets published.
+First you write it and check it in “Validate”; then you upload it to `main` and GitHub Pages publishes the files as they are, without building anything. If a document had errors, the site would show it flagged instead of publishing it.
 :::
 :::
 :::

@@ -2,7 +2,7 @@
   "name": "docpages",
   "version": "1.0.0",
   "private": true,
-  "description": "Documentación bilingüe (es/en) de procedimientos y pruebas en Markdown, publicada como sitio estático con GitHub Pages.",
+  "description": "Procedimientos, guías de laboratorio y pruebas de práctica en Markdown, publicados como sitio estático en GitHub Pages sin compilar nada. package.json solo hace falta para mantener el código (pruebas y librerías).",
   "type": "module",
   "license": "MIT",
   "author": "Jose Eduardo Romero Jimenez (https://github.com/Edunzz)",
@@ -10,16 +10,10 @@
     "node": ">=22"
   },
   "scripts": {
+    "test": "node --test \"tests/**/*.test.mjs\"",
     "vendor": "node scripts/vendor.mjs",
     "validate": "node scripts/validate-documents.mjs",
-    "manifest": "node scripts/build-manifest.mjs",
-    "check:links": "node scripts/check-links.mjs",
-    "build:site": "node scripts/build-site.mjs",
-    "build": "npm run vendor && npm run validate && npm run manifest && npm run check:links && npm run build:site",
-    "test": "node --test \"tests/**/*.test.mjs\"",
-    "check": "npm run validate && npm run check:links && npm test",
-    "serve": "node scripts/serve.mjs",
-    "preview": "npm run build && node scripts/serve.mjs --dir _site --base /docpages/"
+    "check:links": "node scripts/check-links.mjs"
   },
   "dependencies": {
     "@primer/octicons": "19.38.0",

@@ -29,8 +29,8 @@ const CASES = [
   ["steps", { ...base, type: "steps", status: "passed" }, false],
   ["steps", { ...base, type: "test" }, false],
   ["steps", { ...base, type: "steps", version: "v1" }, false],
-  ["steps", { ...base, type: "steps", kind: "lab-guide", level: "beginner", duration: { es: "30 min", en: "30 min" }, objectives: ["Uno", { es: "Dos" }], prerequisites: ["Node"] }, true],
-  ["steps", { ...base, type: "steps", kind: "lab" }, false],
+  ["steps", { ...base, type: "steps", level: "beginner", duration: { es: "30 min", en: "30 min" }, objectives: ["Uno", { es: "Dos" }], prerequisites: ["Node"] }, true],
+  ["steps", { ...base, type: "steps", kind: "lab-guide" }, false],
   ["steps", { ...base, type: "steps", objectives: [] }, false],
   ["steps", { ...base, type: "steps", level: "experto" }, false],
   ["steps", { ...base, type: "steps", passingScore: 70 }, false],
@@ -60,7 +60,7 @@ test("formato de fecha (Ajv se usa sin formatos; aquí se comprueba el propio)",
 
 test("las definiciones y los campos comunes son idénticos en ambos esquemas", () => {
   assert.deepEqual(SCHEMAS.steps.$defs, SCHEMAS.test.$defs);
-  const only = { steps: ["kind"], test: ["passingScore", "feedback", "shuffle"] };
+  const only = { steps: [], test: ["passingScore", "feedback", "shuffle"] };
   const shared = Object.keys(SCHEMAS.steps.properties).filter((key) => key !== "type" && !only.steps.includes(key));
   assert.deepEqual(shared.sort(), Object.keys(SCHEMAS.test.properties).filter((key) => key !== "type" && !only.test.includes(key)).sort());
   for (const key of shared) assert.deepEqual(SCHEMAS.steps.properties[key], SCHEMAS.test.properties[key], key);

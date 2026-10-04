@@ -8,13 +8,12 @@
  * navegador («Actualizar desde el repositorio»), así que las reglas son las
  * mismas en el CI y en vivo:
  *
- *   documents/steps/**\/{titulo}.steps.md  → type "steps"
- *       kind: "procedure"  (por defecto) → Procedimiento
- *       kind: "lab-guide"                → Guía de laboratorio
- *   documents/tests/**\/{titulo}.test.md   → type "test" → Prueba de práctica
+ *   documents/steps/**\/{titulo}.procedure.steps.md  → Procedimiento       (type "steps")
+ *   documents/steps/**\/{titulo}.labguide.steps.md   → Guía de laboratorio (type "steps")
+ *   documents/tests/**\/{titulo}.test.md             → Prueba de práctica  (type "test")
  *
- * Cualquier otro Markdown dentro de /documents es un error: o sigue el
- * formato o no se publica nada.
+ * El nombre del archivo decide el tipo. Cualquier otro Markdown dentro de
+ * /documents es un error: o sigue el formato o no se publica.
  */
 
 import {
@@ -45,14 +44,14 @@ export const DOCUMENT_TYPES = Object.freeze({
   test: Object.freeze({ type: "test", suffix: ".test.md", folder: "documents/tests", route: "tests", mode: "tests" }),
 });
 
-/** Categorías visibles, en orden de presentación, con el tipo de archivo que las contiene. */
+/** Categorías visibles, en orden de presentación: el sufijo del archivo decide cuál es. */
 export const CATEGORIES = Object.freeze(["procedure", "lab-guide", "practice-test"]);
+export const CATEGORY_SUFFIXES = Object.freeze({ procedure: ".procedure.steps.md", "lab-guide": ".labguide.steps.md", "practice-test": ".test.md" });
 const CATEGORY_TYPES = Object.freeze({ procedure: "steps", "lab-guide": "steps", "practice-test": "test" });
-export const STEPS_KINDS = Object.freeze(["procedure", "lab-guide"]);
 export const LEVELS = Object.freeze(["beginner", "intermediate", "advanced"]);
 
 export const MODES = Object.freeze(["all", "steps", "tests"]);
-export const FILE_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*\.(?:steps|test)\.md$/;
+export const FILE_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*\.(?:procedure\.steps|labguide\.steps|test)\.md$/;
 
 /** Valores de ejemplo para validar URLs con tokens sin conocer el repositorio real. */
 const SAMPLE_TOKENS = {
@@ -85,11 +84,18 @@ export function enabledCategories(mode) {
 
 export const categoryType = (category) => CATEGORY_TYPES[category] || null;
 
-/** Categoría de una entrada del manifiesto o de un análisis. */
+/** Categoría según el sufijo del archivo, o null si no tiene uno válido. */
+export function categoryFromPath(path) {
+  const name = String(path).split("/").pop();
+  return CATEGORIES.find((category) => name.endsWith(CATEGORY_SUFFIXES[category])) || null;
+}
+
+/** Categoría de una entrada del catálogo o de un análisis. */
 export function categoryOf(entry) {
   if (entry && CATEGORIES.includes(entry.category)) return entry.category;
-  if (!entry || entry.type === "test") return "practice-test";
-  return entry.kind === "lab-guide" ? "lab-guide" : "procedure";
+  const fromPath = entry && entry.path ? categoryFromPath(entry.path) : null;
+  if (fromPath) return fromPath;
+  return entry && entry.type === "test" ? "practice-test" : "procedure";
 }
 
 /** `?type=` de la portada: acepta categorías y los tipos antiguos (steps/test). */
@@ -103,11 +109,10 @@ export function normalizeCategory(value) {
 
 const basename = (path) => String(path).split("/").pop();
 
+/** Formato del archivo: "steps" (procedimientos y guías), "test" (pruebas) o null. */
 export function typeFromPath(path) {
-  const name = basename(path);
-  if (name.endsWith(DOCUMENT_TYPES.steps.suffix)) return "steps";
-  if (name.endsWith(DOCUMENT_TYPES.test.suffix)) return "test";
-  return null;
+  const category = categoryFromPath(path);
+  return category ? CATEGORY_TYPES[category] : null;
 }
 
 /** ¿Es un documento publicable en este modo (sufijo + carpeta correctos)? */
@@ -167,7 +172,7 @@ const stripCode = (text) =>
     .replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[ \t]*$|(?![\s\S]))/gm, "")
     .replace(/`[^`\n]*`/g, "");
 
-const FORMAT_HELP = "Los documentos se llaman «{titulo}.steps.md» (procedimientos y guías de laboratorio) o «{titulo}.test.md» (pruebas de práctica).";
+const FORMAT_HELP = "Los documentos se llaman «{titulo}.procedure.steps.md» (procedimientos), «{titulo}.labguide.steps.md» (guías de laboratorio) o «{titulo}.test.md» (pruebas de práctica).";
 
 /**
  * Analiza un documento completo.
@@ -181,16 +186,19 @@ export function analyzeDocument({ path, source, yaml, schemas, renderer = {}, la
   const error = (message, line = null) => result.errors.push({ line, message });
   const warn = (message, line = null) => result.warnings.push({ line, message });
 
-  // 1. Nombre y ubicación.
-  const type = typeFromPath(path);
-  if (!type) {
-    error(`El archivo no sigue el formato: ${FORMAT_HELP} Renómbralo o sácalo de /documents.`);
+  // 1. Nombre y ubicación: el sufijo decide el tipo.
+  const category = categoryFromPath(path);
+  if (!category) {
+    if (/\.steps\.md$/i.test(basename(path))) error("Indica el tipo en el nombre del archivo: «{titulo}.procedure.steps.md» (procedimiento) o «{titulo}.labguide.steps.md» (guía de laboratorio).");
+    else error(`El archivo no sigue el formato: ${FORMAT_HELP} Renómbralo o sácalo de /documents.`);
     return result;
   }
+  const type = CATEGORY_TYPES[category];
   result.type = type;
+  result.category = category;
   const def = DOCUMENT_TYPES[type];
   if (!FILE_NAME_RE.test(basename(path))) {
-    error(`Nombre de archivo inválido «${basename(path)}»: usa minúsculas, números y guiones (kebab-case) antes de «${def.suffix}».`);
+    error(`Nombre de archivo inválido «${basename(path)}»: usa minúsculas, números y guiones (kebab-case) antes de «${CATEGORY_SUFFIXES[category]}».`);
   }
   if (!String(path).startsWith(`${def.folder}/`)) error(`Los archivos «${def.suffix}» deben estar dentro de /${def.folder}.`);
 
@@ -203,15 +211,17 @@ export function analyzeDocument({ path, source, yaml, schemas, renderer = {}, la
   const raw = splitFrontMatter(source).raw;
   const meta = front.data;
   result.meta = meta;
-  result.category = type === "test" ? "practice-test" : meta.kind === "lab-guide" ? "lab-guide" : "procedure";
   result.body = stripTitlePlaceholder(front.body);
   result.bodyLine = front.bodyLine + (front.body.split("\n").length - result.body.split("\n").length);
 
   if (meta.type !== type) {
     error(`El campo «type: ${JSON.stringify(meta.type ?? null)}» no coincide con el sufijo del archivo: «${def.suffix}» exige «type: "${type}"».`, lineOfKey(raw, "type"));
   }
+  if (Object.prototype.hasOwnProperty.call(meta, "kind")) {
+    error(`«kind» ya no se usa: el tipo lo indica el nombre del archivo (${CATEGORY_SUFFIXES.procedure}, ${CATEGORY_SUFFIXES["lab-guide"]} o ${CATEGORY_SUFFIXES["practice-test"]}). Borra esa línea.`, lineOfKey(raw, "kind"));
+  }
   for (const issue of validateAgainstSchema(schemas[type], meta)) {
-    if (issue.path === "/type") continue;
+    if (issue.path === "/type" || issue.path === "/kind") continue;
     const key = issue.path.split("/")[1] || "";
     error(`front matter ${issue.path || "/"}: ${issue.message}.`, key ? lineOfKey(raw, key) : 1);
   }
@@ -360,7 +370,6 @@ export function buildManifestEntry(result, { hash = "", size = 0, rawUrl = "" } 
   if (meta.duration) entry.duration = meta.duration;
   if (meta.level) entry.level = meta.level;
   if (result.type === "steps") {
-    entry.kind = result.category;
     entry.stepCount = result.model.steps.length;
     entry.taskCount = result.model.leaves.length;
   } else {
@@ -371,7 +380,7 @@ export function buildManifestEntry(result, { hash = "", size = 0, rawUrl = "" } 
     entry.feedback = meta.feedback === "end" ? "end" : "immediate";
     entry.questionTypes = QUESTION_TYPES.filter((type) => questions.some((q) => q.type === type));
   }
-  entry.hash = hash;
+  if (hash) entry.hash = hash;
   entry.size = size;
   if (rawUrl) entry.rawUrl = rawUrl;
   entry.searchText = plainText(result.body);
@@ -379,15 +388,15 @@ export function buildManifestEntry(result, { hash = "", size = 0, rawUrl = "" } 
 }
 
 /**
- * Entrada para un documento con errores (solo en la lectura en vivo): la
- * portada la muestra en «Documentos con errores de formato».
+ * Entrada para un documento con errores: la portada la muestra en
+ * «Documentos con errores de formato» y no como tarjeta.
  */
 export function invalidEntry(result, { rawUrl = "" } = {}) {
   const name = basename(result.path);
   const entry = {
     type: result.type || typeFromPath(result.path) || "steps",
-    category: result.category || categoryOf({ type: result.type || typeFromPath(result.path) }),
-    slug: (result.meta && typeof result.meta.slug === "string" && result.meta.slug) || name.replace(/(\.(steps|test))?\.md$/i, ""),
+    category: result.category || categoryOf({ path: result.path, type: result.type }),
+    slug: (result.meta && typeof result.meta.slug === "string" && result.meta.slug) || result.slug || name.replace(/(\.(procedure|labguide))?(\.(steps|test))?\.md$/i, ""),
     path: result.path,
     title: name,
     invalid: true,
@@ -395,27 +404,4 @@ export function invalidEntry(result, { rawUrl = "" } = {}) {
   };
   if (rawUrl) entry.rawUrl = rawUrl;
   return entry;
-}
-
-/**
- * @param {{documents:Array, repository?:object|null, mode?:string, generatedAt?:string, generator?:object}} input
- */
-export function buildManifest({ documents, repository = null, mode = "all", generatedAt = new Date().toISOString(), generator = {} }) {
-  const sorted = sortDocuments(documents);
-  const count = (category) => sorted.filter((d) => categoryOf(d) === category).length;
-  return {
-    schemaVersion: 2,
-    generator: {
-      name: "docpages",
-      author: "Jose Eduardo Romero Jimenez",
-      authorUrl: "https://github.com/Edunzz",
-      ...generator,
-    },
-    generatedAt,
-    source: "deployment",
-    mode: normalizeMode(mode),
-    repository,
-    counts: { procedures: count("procedure"), labGuides: count("lab-guide"), practiceTests: count("practice-test") },
-    documents: sorted,
-  };
 }

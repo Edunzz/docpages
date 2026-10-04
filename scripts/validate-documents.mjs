@@ -4,6 +4,10 @@
 /**
  * scripts/validate-documents.mjs — Valida /documents con las reglas del sitio.
  *
+ * Opcional: las personas validan en la pestaña «Validar» del sitio. Este
+ * comando es para agentes de IA y automatizaciones; solo necesita Node (no
+ * hace falta npm install):
+ *
  *   node scripts/validate-documents.mjs            informe legible
  *   node scripts/validate-documents.mjs --json     informe en JSON (para agentes/CI)
  *   node scripts/validate-documents.mjs --strict   los avisos también fallan

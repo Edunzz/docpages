@@ -8,7 +8,7 @@ import { VALID_STEPS } from "./fixtures.mjs";
 import { computeProgress, setDone, isComplete, leavesOf, restoreStepsState, serializeStepsState, firstIncompleteStep } from "../assets/js/steps.js";
 import { createStore, documentStateKey, repositoryScope } from "../assets/js/storage.js";
 
-const model = analyze("documents/steps/pasos-prueba.steps.md", VALID_STEPS).model;
+const model = analyze("documents/steps/pasos-prueba.procedure.steps.md", VALID_STEPS).model;
 
 test("hojas: casillas, subpasos sin casillas y pasos sin hijos", () => {
   assert.deepEqual(leavesOf(model, "a"), ["a#0", "a#1", "a1#0", "a2"]);

@@ -275,7 +275,8 @@ export function renderStepsView(ctx, { entry, analysis, stateKey, anchor = "" })
     state.current = stepId;
     if (persist) save();
     sync();
-    if (win.history && typeof win.history.replaceState === "function") win.history.replaceState(null, "", ctx.routeFor(entry, stepId));
+    // En la vista previa de «Validar» la URL no cambia: no es una página publicada.
+    if (!ctx.preview && win.history && typeof win.history.replaceState === "function") win.history.replaceState(null, "", ctx.routeFor(entry, stepId));
     const section = refs.sections.get(stepId);
     if (scroll && typeof section.scrollIntoView === "function") section.scrollIntoView({ behavior: prefersReducedMotion(win) ? "auto" : "smooth", block: "start" });
     if (focus) refs.toggles.get(stepId).focus({ preventScroll: true });

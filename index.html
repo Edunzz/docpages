@@ -10,7 +10,7 @@ https://github.com/Edunzz
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com; font-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>Documentación · Documentation</title>
-    <meta name="description" content="Procedimientos, guías de laboratorio y pruebas de práctica publicados desde Markdown con GitHub Pages.">
+    <meta name="description" content="Procedimientos, guías de laboratorio y pruebas de práctica publicados desde Markdown con GitHub Pages, sin compilar nada.">
     <meta name="theme-color" content="#1f2a44" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)">
     <link rel="icon" href="assets/icons/logo.svg" type="image/svg+xml">
@@ -34,6 +34,10 @@ https://github.com/Edunzz
           <span id="repo-chip-text"></span>
         </a>
         <div class="topbar__actions">
+          <a class="topbar__link" id="nav-validate" href="#/validate">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="assets/icons/sprite.svg#shield-check"></use></svg>
+            <span class="topbar__link-text" data-i18n="nav.validate">Validar</span>
+          </a>
           <div class="lang-switch" role="group" aria-label="Idioma" data-i18n-label="lang.label">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="assets/icons/sprite.svg#languages"></use></svg>
             <button type="button" class="lang-switch__option" data-lang="es" aria-pressed="true" lang="es"><span aria-hidden="true">ES</span><span class="sr-only">Español</span></button>

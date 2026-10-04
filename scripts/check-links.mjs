@@ -10,7 +10,7 @@
  *  - index.html y 404.html (href/src relativos);
  *  - assets/css/*.css (url(...));
  *  - los imports relativos de assets/js/*.js;
- *  - manifest.webmanifest (iconos) y documents.manifest.json (rutas);
+ *  - manifest.webmanifest (iconos);
  *  - los enlaces e imágenes relativos de cada documento (también los de las
  *    opciones y explicaciones de las preguntas);
  *  - el sprite: cada icono del catálogo debe tener su <symbol>.
@@ -70,16 +70,9 @@ export async function checkLinks({ root = ROOT, mode = DOCUMENTATION_MODE } = {}
     }
   }
 
-  // 4. Manifiestos
+  // 4. Manifiesto web
   const webmanifest = JSON.parse(await readFile(path.join(root, "manifest.webmanifest"), "utf8"));
   for (const iconEntry of webmanifest.icons || []) await check("manifest.webmanifest", iconEntry.src, resolveRelativePath("", iconEntry.src));
-  const manifestPath = path.join(root, "documents.manifest.json");
-  if (await exists(manifestPath)) {
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-    for (const doc of manifest.documents || []) await check("documents.manifest.json", doc.path, resolveRelativePath("", doc.path));
-  } else {
-    problems.push({ from: "documents.manifest.json", target: "", message: "no existe: ejecuta «npm run manifest»" });
-  }
 
   // 5. Documentos
   const renderer = createRenderer();

@@ -4,16 +4,17 @@
 /**
  * scripts/lib/docs.mjs — Utilidades compartidas por los scripts de Node.
  *
- * Reutiliza exactamente los módulos del navegador (assets/js/*) para que la
- * validación del CI y la del sitio en vivo sean la misma.
+ * Reutiliza exactamente los módulos del navegador (assets/js/* y las librerías
+ * de assets/vendor) para que la validación por consola y la de la pestaña
+ * «Validar» sean la misma. Solo hace falta Node, sin npm install.
  */
 
 import { readFile, readdir } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import markdownit from "markdown-it";
-import * as yaml from "js-yaml";
+// Las mismas copias que usa el navegador: así el validador corre con solo Node, sin npm install.
+import markdownit from "../../assets/vendor/markdown-it.mjs";
+import * as yaml from "../../assets/vendor/js-yaml.mjs";
 import { createMarkdownRenderer } from "../../assets/js/markdown.js";
 import { analyzeDocument, findDuplicateSlugs, enabledTypes, typeFromPath, normalizeMode } from "../../assets/js/documents.js";
 import { CONFIG, DOCUMENTATION_MODE } from "../../assets/js/config.js";
@@ -47,10 +48,6 @@ export async function loadSchemas(root = ROOT) {
 
 export function createRenderer() {
   return createMarkdownRenderer({ markdownit });
-}
-
-export function hashSource(text) {
-  return "sha256-" + createHash("sha256").update(text, "utf8").digest("hex");
 }
 
 /**
@@ -103,16 +100,6 @@ export function formatReport({ mode, results, notes }, { color = false } = {}) {
   const warnings = results.reduce((n, r) => n + r.warnings.length, 0) + notes.filter((n) => n.level === "warning").length;
   lines.push("", `${results.length} documento(s) · ${errors} error(es) · ${warnings} aviso(s)`);
   return lines.join("\n");
-}
-
-/** Datos del repositorio desde las variables de GitHub Actions. */
-export function repositoryFromEnv(env = process.env) {
-  const full = String(env.GITHUB_REPOSITORY || "");
-  if (!/^[^/\s]+\/[^/\s]+$/.test(full)) return null;
-  const [owner, name] = full.split("/");
-  const server = String(env.GITHUB_SERVER_URL || "https://github.com").replace(/\/+$/, "");
-  const pagesUrl = env.PAGES_BASE_URL ? String(env.PAGES_BASE_URL).replace(/\/?$/, "/") : "";
-  return { owner, name, url: `${server}/${owner}/${name}`, branch: env.GITHUB_REF_NAME || "", sha: env.GITHUB_SHA || "", pagesUrl };
 }
 
 /** `--clave valor` y `--bandera` → objeto. */

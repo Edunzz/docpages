@@ -1,35 +1,38 @@
 # DocPages
 
-**Turn Markdown files into a bilingual (English/Spanish) website on GitHub Pages: step-by-step procedures, hands-on lab guides and practice tests.**
+**Turn Markdown files into a bilingual (English/Spanish) website on GitHub Pages: step-by-step procedures, hands-on lab guides and practice tests. Nothing to install, nothing to build.**
 
 [Leer en español](README.es.md)
 
-| Home | Lab guide | Practice test |
-|---|---|---|
-| ![Home page with search and the three sections](docs/images/home.png) | ![Lab guide with objectives, steps and progress](docs/images/lab-guide.png) | ![Practice test with graded questions and score](docs/images/practice-test.png) |
+| Home | Validate tab |
+|---|---|
+| ![Home page with search and the three sections](docs/images/home.png) | ![Validate tab with the editor, the errors and the preview](docs/images/validate.png) |
+| **Lab guide** | **Practice test** |
+| ![Lab guide with objectives, steps and progress](docs/images/lab-guide.png) | ![Practice test with the question list, graded answers and score](docs/images/practice-test.png) |
 
 ## What can I publish?
 
-| Type | What the reader gets | File you write |
+| Type | What the reader gets | The file name ends in |
 |---|---|---|
-| **Procedure** | Steps with checkboxes and a progress bar. | `documents/steps/my-procedure.steps.md` |
-| **Lab guide** | A procedure plus objectives, prerequisites, duration and level. | `documents/steps/my-lab.steps.md` with `kind: "lab-guide"` |
-| **Practice test** | Training questions they answer, check and get a score for. | `documents/tests/my-test.test.md` |
+| **Procedure** | Steps with checkboxes and a progress bar. | `.procedure.steps.md` |
+| **Lab guide** | A procedure plus objectives, prerequisites, duration and level. | `.labguide.steps.md` |
+| **Practice test** | Training questions they answer, check and get a score for. | `.test.md` |
 
-Everything runs in the browser: no server, no database. Progress and answers are saved only in each reader's browser.
+**The end of the file name decides the type.** Procedures and lab guides go in `documents/steps/`, practice tests in `documents/tests/`.
 
-## Get started in 4 steps
+Everything runs in the browser: no server, no database, no build step. Progress and answers are saved only in each reader's browser.
+
+## Get started in 3 steps
 
 1. Click **Use this template** (or fork the repository) to get your own copy.
-2. In your copy, open **Settings → Pages** and set **Source** to **GitHub Actions**.
-3. Add or edit files in `documents/` (see below) and push to `main`.
-4. Wait for the green check in the **Actions** tab. Your site is at `https://<your-user>.github.io/<your-repo>/`.
+2. In your copy, open **Settings → Pages** and choose **Deploy from a branch**, branch **`main`**, folder **`/ (root)`**. Save.
+3. Add or edit files in `documents/` and upload them to `main`. In a minute or two your site is at `https://<your-user>.github.io/<your-repo>/`.
 
-You don't need to change any names or links: the site detects your user and repository by itself. The files already in `documents/` are examples; keep them, edit them or delete them.
+You don't need to change any names or links: the site detects your user and repository by itself, and finds your documents by itself. The files already in `documents/` are examples; keep them, edit them or delete them.
 
 ## Write a procedure
 
-Create `documents/steps/install-the-app.steps.md`:
+Create `documents/steps/install-the-app.procedure.steps.md`:
 
 ```markdown
 ---
@@ -37,7 +40,6 @@ title: "Install the app"
 description: "From download to first launch."
 slug: "install-the-app"
 type: "steps"
-kind: "procedure"
 version: "1.0.0"
 updated: "2026-10-04"
 ---
@@ -58,7 +60,7 @@ updated: "2026-10-04"
 
 ## Write a lab guide
 
-It is a procedure with `kind: "lab-guide"` and a few extra fields that appear at the top of the page:
+Same format, but the name ends in `.labguide.steps.md`, and you can add objectives, prerequisites, duration and level (they appear at the top of the page). Create `documents/steps/first-container.labguide.steps.md`:
 
 ```markdown
 ---
@@ -66,7 +68,6 @@ title: "Lab: your first container"
 description: "Run a container and stop it."
 slug: "lab-first-container"
 type: "steps"
-kind: "lab-guide"
 version: "1.0.0"
 updated: "2026-10-04"
 duration: "30 minutes"
@@ -83,7 +84,7 @@ prerequisites:
 :::
 ```
 
-`level` can be `beginner`, `intermediate` or `advanced`. Full example: [`first-practice-test-lab.steps.md`](documents/steps/first-practice-test-lab.steps.md).
+`level` can be `beginner`, `intermediate` or `advanced`. Full example, which teaches the seven question types: [`first-practice-test-lab.labguide.steps.md`](documents/steps/first-practice-test-lab.labguide.steps.md).
 
 ## Write a practice test
 
@@ -159,113 +160,103 @@ Hello! This paragraph is shown in English.
 
 The reader switches language with the ES/EN buttons at the top of the site.
 
-## If a file is wrong, you'll know
+## Check your document: the Validate tab
 
-The site never publishes a file that doesn't follow the format. Check your files with:
+Open **Validate** (top right of the site, published or on your computer):
 
-```bash
-npm run validate
-```
+1. **Open** or drag your `.md` files, or start from a **template** (procedure, lab guide or practice test with the seven question types).
+2. Each error shows **its line**; click it and the cursor jumps there. You can fix it right in the editor.
+3. When there are no errors you see the **real preview**: you can tick steps or answer the questions.
+4. **Download** the file (or copy it), save it in the folder shown and upload it to `main`.
 
-Each problem comes with the file, the line and the reason (the messages are in Spanish):
+Nothing is uploaded anywhere: everything happens in your browser. The validator also warns you if another document already uses your `slug`.
 
-```text
-✖ documents/tests/networking-basics.test.md
-    error   L11: Pregunta 1: una pregunta «single» necesita exactamente una opción correcta «- [x]» (tiene 0).
-```
-
-On GitHub the same check runs on every push and pull request. If it fails, GitHub marks the line in the file and the published site stays as it was.
+The site never publishes a file that doesn't follow the format: if one slips into `documents/`, the home page lists it under **Documents with format errors**, with the line of each error.
 
 | The message says… | What to do |
 |---|---|
-| «El archivo no sigue el formato» | Rename the file so it ends in `.steps.md` or `.test.md`, or move it out of `documents/`. |
+| «El archivo no sigue el formato» / «Indica el tipo en el nombre» | Rename it so it ends in `.procedure.steps.md`, `.labguide.steps.md` or `.test.md`. |
 | «Atributo desconocido» or «Atributo mal escrito» | Fix the typo in the `:::` line and use quotes: `title="…"`. |
 | «exactamente una opción correcta» | Mark exactly one `- [x]` (use `type="multiple"` for several). |
 | «fuera de un «:::question»» | Move the options inside a question block. |
-| «slug duplicado» | Two files use the same `slug`; change one. |
+| «slug duplicado» / «ya lo usa» | Two files use the same `slug`; change one. |
 
-## Try it on your computer (optional)
+The validator messages are in Spanish; the rest of the site follows the selected language.
 
-You need [Node.js](https://nodejs.org/) 22 or later.
+## See it on your computer (optional)
+
+Serve the repository folder with any web server that lists folders. In VS Code, right-click `index.html` → **Open with Live Server**; or, in a terminal inside the folder:
 
 ```bash
-npm ci            # install (once)
-npm run validate  # check your documents
-npm run preview   # open http://localhost:8080/docpages/
+python -m http.server 8000
 ```
+
+Open <http://localhost:8000/>. The home page shows what is in **your** `documents/` folder, with errors flagged, and the repository links point to your copy. Double-clicking `index.html` does not work: browsers block the app when it is opened as a file.
 
 ## Settings
 
 - **Show only some types:** in `assets/js/config.js`, set `DOCUMENTATION_MODE` to `"all"` (everything), `"steps"` (procedures and lab guides) or `"tests"` (practice tests).
 - **Site name:** `siteTitle` and `siteTagline` in the same file.
+- **Custom domain:** set `repository: { owner: "you", name: "your-repo" }` in the same file, so the site knows which repository to read.
 - **Colors and logo:** the variables at the top of `assets/css/app.css` and the file `assets/icons/logo.svg`.
 
 ## Common problems
 
 | Problem | Solution |
 |---|---|
-| The workflow fails at «Configurar GitHub Pages» | Settings → Pages → Source: **GitHub Actions**, then re-run the workflow. |
-| My new document doesn't show up | Run `npm run validate`; check the file name and folder. |
+| A new document doesn't show up | Wait a minute or two for Pages and press **Refresh** on the home page. Check the name in **Validate**. |
+| «Rate limit» on the home page | The site reads the document list from GitHub (at most once every 10 minutes per browser), and GitHub allows 60 reads per hour per network. Wait a bit; meanwhile the last saved list is used. |
 | My progress or answers disappeared | You changed `version`, `slug` or an `id`. Each version keeps its own progress on purpose. |
-| «Rate limit» when refreshing from GitHub | GitHub allows 60 requests per hour without login. Wait and try again. |
-| Opening `index.html` directly shows an error | Use `npm run preview`: the documents can't be loaded from `file://`. |
+| The site shows Markdown as plain pages | The `.nojekyll` file is missing from the root; add it back (an empty file). |
 
 ## Using an AI assistant
 
-The skill [`.github/skills/documentation-pages/SKILL.md`](.github/skills/documentation-pages/SKILL.md) teaches AI agents (GitHub Copilot, Claude…) every rule. For example, paste your questions and answers and ask: *"Turn these into a practice test"*. The agent writes a valid `.test.md` and runs `npm run validate`.
+The skill [`.github/skills/documentation-pages/SKILL.md`](.github/skills/documentation-pages/SKILL.md) teaches AI agents (GitHub Copilot, Claude…) every rule. For example, paste your questions and answers and ask: *"Turn these into a practice test"*. The agent writes a valid `.test.md`; you check it in **Validate** and upload it.
 
 ## For developers
 
 <details>
-<summary>Commands, how publishing works, structure and security</summary>
-
-### Commands
-
-| Command | What it does |
-|---|---|
-| `npm run vendor` | Copies the browser libraries to `assets/vendor/` and builds the icon sprite. |
-| `npm run validate` | Validates every Markdown file in `documents/`. `--json` for agents, `--strict` to fail on warnings too. |
-| `npm run manifest` | Writes `documents.manifest.json` (the site index). Writes nothing if there are errors. |
-| `npm run check:links` | Checks internal links, images, imports and icons. |
-| `npm test` | Unit, integration (jsdom) and accessibility (axe-core) tests. |
-| `npm run build` | Everything above except the tests, plus the static site in `_site/`. |
-| `npm run preview` | Builds and serves `_site/` under `/docpages/`, like a GitHub Pages project site. |
-
-On Git Bash for Windows, prefix `MSYS_NO_PATHCONV=1` when running `node scripts/serve.mjs --base /my-repo/`.
-
-### Publishing
-
-- [`.github/workflows/pages.yml`](.github/workflows/pages.yml) runs on every push to `main`: install, validate, build the manifest with your repository data, check links, test, build `_site/` and deploy. Minimal permissions (`contents: read`, `pages: write`, `id-token: write`), actions pinned by SHA, no overlapping deployments.
-- [`.github/workflows/validate.yml`](.github/workflows/validate.yml) runs on pull requests with read-only permissions, so errors are flagged before merging.
-- Without Actions: run `npm run vendor && npm run manifest`, commit the result, set **Settings → Pages → Deploy from a branch → `main` / root**, and keep the `.nojekyll` file.
+<summary>How it works, tests, structure and security</summary>
 
 ### How it works
 
-- Hash routes (`#/steps/{slug}`, `#/tests/{slug}`), so the site works at the domain root and under `/{repository}/`.
-- The repository is detected from the GitHub Pages URL, then from the deployment manifest; `CONFIG.repository` in `config.js` overrides both (useful with a custom domain).
-- **Refresh from the public repository** reads the live documents through the public GitHub API, validates them with the same rules as CI and shows invalid files with their errors. If GitHub is unreachable, the deployed content is kept.
-- The Node scripts import the same modules as the browser, so local, CI and live validation always agree.
+- **No build step.** GitHub Pages serves the repository as is. The browser libraries are committed in `assets/vendor/` (no CDN).
+- **Document list.** On GitHub Pages, one call to the public GitHub API (`git/trees/HEAD`) lists `documents/`, cached for 10 minutes per browser; if it fails, the last saved list is used. Locally, the site reads the folder listing of the web server.
+- **Repository.** From the GitHub Pages URL; locally from `.git/config` (`origin`) if the server serves it; `CONFIG.repository` overrides both.
+- **Same rules everywhere.** The home page, the Validate tab and the command-line validator use the same modules (`assets/js/documents.js`, `quiz.js`, `markdown.js`, `schema.js`).
+- Hash routes (`#/steps/{slug}`, `#/tests/{slug}`, `#/validate`), so the site works at the domain root and under `/{repository}/`.
+
+### Command line (optional)
+
+```bash
+node scripts/validate-documents.mjs        # needs only Node: --json for agents, --strict to fail on warnings
+npm ci && npm test                         # unit, integration (jsdom) and accessibility (axe-core) tests
+npm run check:links                        # internal links, imports and icons
+npm run vendor                             # refresh assets/vendor and the icon sprite after updating libraries
+```
+
+On GitHub Actions, `validate-documents.mjs` also prints `::error file=…,line=…::` annotations, if you want to add your own check.
 
 ### Structure
 
 ```text
-assets/js/        app, router, Markdown parser, validation, steps.js (procedures and labs), quiz.js (practice tests)
-assets/css/       styles (light/dark themes)
-assets/vendor/    markdown-it, js-yaml, DOMPurify, Prism (no CDN)
+assets/js/        app, router, catalog (document discovery), validator (Validate tab), steps, quiz, parser, validation
+assets/css/       styles (light/dark themes, responsive)
+assets/vendor/    markdown-it, js-yaml, DOMPurify, Prism
 documents/        your documents (steps/ and tests/)
 schemas/          JSON Schema of the front matter
-scripts/          validate, manifest, check-links, build-site, serve, vendor
+scripts/          validate-documents, check-links, vendor
 tests/            node:test + jsdom + axe-core
 docs/             progress flow diagram and screenshots
 ```
 
 ### Security
 
-Raw HTML is never executed: markdown-it runs with `html: false` and all generated HTML goes through DOMPurify. Only `http(s)`, `mailto`, `tel`, anchors and relative links are allowed (`javascript:` and `data:` are validation errors). A strict Content Security Policy blocks inline scripts and styles. There are no tokens in the frontend; the public API is used without authentication (60 requests per hour per IP).
+Raw HTML is never executed: markdown-it runs with `html: false` and all generated HTML goes through DOMPurify. Only `http(s)`, `mailto`, `tel`, anchors and relative links are allowed (`javascript:` and `data:` are validation errors). A strict Content Security Policy blocks inline scripts and styles. There are no tokens in the frontend. The Validate tab never uploads files.
 
 ### Accessibility
 
-Semantic HTML, keyboard navigation, visible focus, screen reader announcements, statuses shown with icon and text (not only color) and `prefers-reduced-motion` support. The tests run axe-core on every view in both languages.
+Semantic HTML, keyboard navigation, visible focus, screen reader announcements, statuses shown with icon and text (not only color), `prefers-reduced-motion` support and a layout that works from 360 px phones to wide screens. The tests run axe-core on every view in both languages.
 
 </details>
 

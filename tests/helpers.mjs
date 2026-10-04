@@ -5,13 +5,13 @@
  * tests/helpers.mjs — Utilidades comunes de las pruebas (node:test + jsdom).
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { JSDOM, VirtualConsole } from "jsdom";
 import markdownit from "markdown-it";
 import * as yaml from "js-yaml";
 import createDOMPurify from "dompurify";
-import { ROOT, loadSchemas } from "../scripts/lib/docs.mjs";
+import { ROOT, loadSchemas, walk } from "../scripts/lib/docs.mjs";
 import { createMarkdownRenderer } from "../assets/js/markdown.js";
 import { analyzeDocument } from "../assets/js/documents.js";
 
@@ -50,22 +50,53 @@ export function throwingStorage() {
 }
 
 const CONTENT_TYPES = { ".json": "application/json", ".md": "text/markdown", ".svg": "image/svg+xml", ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css" };
+const TREE_RE = /^https:\/\/api\.github\.com\/repos\/([^/]+)\/([^/]+)\/git\/trees\/HEAD/;
+
+/** Listado HTML de una carpeta, como lo generan los servidores locales. */
+function listingHtml(entries, { style, dirUrlPath }) {
+  const links = entries.map(({ name, dir }) =>
+    style === "serve-index"
+      ? `<li><a href="${dirUrlPath}${encodeURIComponent(name)}" class="icon ${dir ? "icon-directory" : "icon-md"}" title="${name}"><span class="name">${name}</span></a></li>`
+      : `<li><a href="${encodeURIComponent(name)}${dir ? "/" : ""}">${name}${dir ? "/" : ""}</a></li>`,
+  );
+  const parent = style === "serve-index" ? `<li><a href="${dirUrlPath.replace(/[^/]+\/$/, "")}" class="icon icon-directory" title="..">..</a></li>` : "";
+  return `<!DOCTYPE HTML><html><head><title>Directory listing</title></head><body><h1>Directory listing</h1><ul>${parent}${links.join("")}</ul></body></html>`;
+}
 
 /**
- * fetch que sirve archivos del repositorio como si fueran el sitio publicado
- * en `base`. `routes` permite simular otras URLs (API de GitHub, raw…).
+ * fetch que sirve archivos de `root` como si fueran el sitio publicado en `base`:
+ *  - `api`: emula el árbol de la API de GitHub (`git/trees/HEAD`) con los archivos de `root`;
+ *  - `listing`: "python" | "serve-index" | false, listado de carpetas de un servidor local;
+ *  - `gitConfig`: texto de `.git/config` (por defecto no se sirve);
+ *  - `routes`: otras URLs simuladas (tienen prioridad).
  */
-export function siteFetch({ base = "https://owner.github.io/docpages/", root = ROOT, routes = {} } = {}) {
+export function siteFetch({ base = "https://owner.github.io/docpages/", root = ROOT, routes = {}, api = true, listing = "python", gitConfig = null } = {}) {
   const calls = [];
+  const baseUrl = new URL(base);
   const impl = async (url) => {
     const target = new URL(String(url), base);
     calls.push(target.href);
     for (const [pattern, handler] of Object.entries(routes)) {
       if (target.href.startsWith(pattern)) return handler(target);
     }
-    const prefix = new URL(base).pathname;
-    if (target.origin !== new URL(base).origin || !target.pathname.startsWith(prefix)) throw new TypeError("Failed to fetch");
-    const rel = decodeURIComponent(target.pathname.slice(prefix.length));
+    const tree = TREE_RE.exec(target.href);
+    if (tree && api) {
+      const files = (await walk(path.join(root, "documents"))).map((abs) => path.relative(root, abs).split(path.sep).join("/"));
+      return jsonResponse({ sha: "abc", truncated: false, tree: [{ path: "documents", type: "tree" }, ...files.map((p) => ({ path: p, type: "blob" }))] });
+    }
+    if (target.origin !== baseUrl.origin || !target.pathname.startsWith(baseUrl.pathname)) throw new TypeError("Failed to fetch");
+    const rel = decodeURIComponent(target.pathname.slice(baseUrl.pathname.length));
+    if (rel === ".git/config") return gitConfig == null ? new Response("Not found", { status: 404 }) : new Response(gitConfig, { status: 200, headers: { "content-type": "text/plain" } });
+    if (rel === "" || rel.endsWith("/")) {
+      if (!rel) return new Response(await readFile(path.join(root, "index.html")), { status: 200, headers: { "content-type": "text/html" } });
+      if (!listing) return new Response("Not found", { status: 404 });
+      try {
+        const entries = (await readdir(path.join(root, rel), { withFileTypes: true })).map((e) => ({ name: e.name, dir: e.isDirectory() }));
+        return new Response(listingHtml(entries, { style: listing, dirUrlPath: target.pathname }), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+      } catch {
+        return new Response("Not found", { status: 404 });
+      }
+    }
     try {
       const body = await readFile(path.join(root, rel));
       return new Response(body, { status: 200, headers: { "content-type": CONTENT_TYPES[path.extname(rel)] || "application/octet-stream" } });
