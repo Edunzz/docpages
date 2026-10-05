@@ -1,6 +1,10 @@
 # DocPages
 
-**Turn Markdown files into a bilingual (English/Spanish) website on GitHub Pages: step-by-step procedures, hands-on lab guides and practice tests. Nothing to install, nothing to build.**
+**Turn Markdown files into a bilingual (English/Spanish) website on GitHub Pages: step-by-step procedures, hands-on lab guides and practice tests. Nothing to install, nothing to build.** 
+
+### [https://edunzz.github.io/docpages](https://edunzz.github.io/docpages/)
+
+---
 
 [Leer en español](README.es.md)
 
